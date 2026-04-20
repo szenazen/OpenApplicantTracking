@@ -1,0 +1,123 @@
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
+import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+
+const REGION_MAP: Record<string, string> = {
+  'us-east-1': 'US_EAST_1',
+  'eu-west-1': 'EU_WEST_1',
+  'ap-southeast-1': 'AP_SOUTHEAST_1',
+  'ap-northeast-1': 'AP_NORTHEAST_1',
+  'ap-southeast-2': 'AP_SOUTHEAST_2',
+};
+
+@Injectable()
+export class AccountsService {
+  constructor(
+    private readonly globalDb: GlobalPrismaService,
+    private readonly router: RegionRouterService,
+  ) {}
+
+  /**
+   * Creates an Account:
+   *   1. inserts into the global AccountsDirectory (records region)
+   *   2. provisions the Account row in the chosen region's DB
+   *   3. creates a default pipeline with 6 statuses
+   *   4. grants the creator an 'admin' membership
+   */
+  async create(params: {
+    ownerUserId: string;
+    name: string;
+    slug: string;
+    region: string; // e.g. 'us-east-1'
+  }) {
+    const regionEnum = REGION_MAP[params.region];
+    if (!regionEnum) throw new BadRequestException(`Unsupported region: ${params.region}`);
+    if (!this.router.listRegions().includes(params.region)) {
+      throw new BadRequestException(`Region not configured on this deployment: ${params.region}`);
+    }
+
+    const existing = await this.globalDb.accountDirectory.findUnique({ where: { slug: params.slug } });
+    if (existing) throw new ConflictException('Slug already taken');
+
+    // Ensure we have the system roles.
+    const adminRole = await this.globalDb.role.upsert({
+      where: { name: 'admin' },
+      update: {},
+      create: { name: 'admin', scope: 'ACCOUNT', isSystem: true, description: 'Full access within an account' },
+    });
+
+    // 1. Global directory
+    const directory = await this.globalDb.accountDirectory.create({
+      data: {
+        name: params.name,
+        slug: params.slug,
+        region: regionEnum as any,
+        ownerUserId: params.ownerUserId,
+      },
+    });
+
+    // 2. Regional row + default pipeline
+    const regional = this.router.forRegion(params.region);
+    await regional.$transaction(async (tx) => {
+      await tx.account.create({
+        data: {
+          id: directory.id,
+          name: params.name,
+          slug: params.slug,
+          region: params.region,
+        },
+      });
+      const pipeline = await tx.pipeline.create({
+        data: {
+          accountId: directory.id,
+          name: 'Default Pipeline',
+          isDefault: true,
+        },
+      });
+      const defaults = [
+        { name: 'New candidate', category: 'NEW' as const, color: '#60a5fa' },
+        { name: 'Screening', category: 'IN_PROGRESS' as const, color: '#a78bfa' },
+        { name: 'HR Interview', category: 'IN_PROGRESS' as const, color: '#f472b6' },
+        { name: 'Technical Interview', category: 'IN_PROGRESS' as const, color: '#facc15' },
+        { name: 'Offer', category: 'IN_PROGRESS' as const, color: '#fb923c' },
+        { name: 'Hired', category: 'HIRED' as const, color: '#22c55e' },
+        { name: 'Dropped', category: 'DROPPED' as const, color: '#ef4444' },
+      ];
+      await tx.pipelineStatus.createMany({
+        data: defaults.map((s, i) => ({ ...s, pipelineId: pipeline.id, position: i })),
+      });
+    });
+
+    // 3. Membership
+    await this.globalDb.membership.create({
+      data: {
+        userId: params.ownerUserId,
+        accountId: directory.id,
+        roleId: adminRole.id,
+        status: 'ACTIVE',
+      },
+    });
+
+    return {
+      id: directory.id,
+      name: directory.name,
+      slug: directory.slug,
+      region: params.region,
+    };
+  }
+
+  async getForUser(userId: string, accountId: string) {
+    const membership = await this.globalDb.membership.findUnique({
+      where: { userId_accountId: { userId, accountId } },
+      include: { account: true, role: true },
+    });
+    if (!membership) throw new NotFoundException('Account not found');
+    return {
+      id: membership.account.id,
+      name: membership.account.name,
+      slug: membership.account.slug,
+      region: membership.account.region.toLowerCase().replace(/_/g, '-'),
+      role: membership.role.name,
+    };
+  }
+}
