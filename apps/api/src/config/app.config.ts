@@ -35,7 +35,7 @@ export function appConfig() {
   const regions: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     const match = key.match(/^REGION_([A-Z0-9_]+)_DATABASE_URL$/);
-    if (match && value) regions[normalizeRegion(match[1])] = value;
+    if (match && match[1] && value) regions[normalizeRegion(match[1])] = value;
   }
 
   return {
