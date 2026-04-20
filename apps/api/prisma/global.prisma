@@ -1,0 +1,234 @@
+// =============================================================================
+// Global control-plane datasource.
+//
+// Holds data that is NOT region-scoped:
+//   - Users (global identity — one email/password, many accounts)
+//   - Auth credentials, sessions, MFA
+//   - Accounts directory (account_id -> region mapping, minimal metadata)
+//   - Memberships (which users belong to which accounts + role)
+//   - Roles & Permissions (RBAC catalog; system roles are global)
+//   - Skills catalog (source of truth, replicated to regional read caches)
+//   - Audit: global auth events only
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/global"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("GLOBAL_DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Identity & Access
+// -----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  displayName   String
+  avatarUrl     String?
+  locale        String    @default("en")
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  credentials   AuthCredential?
+  sessions      Session[]
+  memberships   Membership[]
+  invitations   Invitation[]    @relation("InvitationInviter")
+
+  @@index([email])
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model AuthCredential {
+  userId        String   @id
+  passwordHash  String
+  mfaSecret     String?
+  mfaEnabled    Boolean  @default(false)
+  lastLoginAt   DateTime?
+  failedAttempts Int     @default(0)
+  lockedUntil   DateTime?
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_credentials")
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  refreshHash   String   @unique
+  userAgent     String?
+  ip            String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// -----------------------------------------------------------------------------
+// Accounts directory — lookup of account_id → region so the API can route.
+// The full account record (with business data) lives in the regional DB.
+// -----------------------------------------------------------------------------
+
+model AccountDirectory {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  region       Region
+  ownerUserId  String
+  status       AccountStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships  Membership[]
+  invitations  Invitation[]
+
+  @@index([region])
+  @@map("accounts_directory")
+}
+
+enum Region {
+  US_EAST_1
+  EU_WEST_1
+  AP_SOUTHEAST_1
+  AP_NORTHEAST_1
+  AP_SOUTHEAST_2
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+// -----------------------------------------------------------------------------
+// Memberships = join table (User ↔ Account) + role assignment.
+// -----------------------------------------------------------------------------
+
+model Membership {
+  id           String   @id @default(cuid())
+  userId       String
+  accountId    String
+  roleId       String
+  status       MembershipStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      AccountDirectory @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role         Role             @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, accountId])
+  @@index([accountId])
+  @@map("memberships")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  REVOKED
+}
+
+model Invitation {
+  id           String   @id @default(cuid())
+  accountId    String
+  email        String
+  roleId       String
+  inviterId    String
+  token        String   @unique
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  account      AccountDirectory @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role         Role             @relation(fields: [roleId], references: [id])
+  inviter      User             @relation("InvitationInviter", fields: [inviterId], references: [id])
+
+  @@index([email])
+  @@index([accountId])
+  @@map("invitations")
+}
+
+// -----------------------------------------------------------------------------
+// RBAC
+// -----------------------------------------------------------------------------
+
+model Role {
+  id           String   @id @default(cuid())
+  name         String   @unique          // "admin", "recruiter", "hiring_manager", "viewer"
+  scope        RoleScope @default(ACCOUNT)
+  description  String?
+  isSystem     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  permissions  RolePermission[]
+  memberships  Membership[]
+  invitations  Invitation[]
+
+  @@map("roles")
+}
+
+enum RoleScope {
+  SYSTEM    // platform-wide (superadmin)
+  ACCOUNT   // scoped to a single account
+}
+
+model Permission {
+  id           String   @id @default(cuid())
+  resource     String                     // "job" | "candidate" | "application" | "account" ...
+  action       String                     // "create" | "read" | "update" | "delete" | "move"
+  description  String?
+
+  roles        RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId        String
+  permissionId  String
+
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// -----------------------------------------------------------------------------
+// Skills catalog — source of truth.
+// Replicated via event-stream to each region's skill cache for fast reads.
+// -----------------------------------------------------------------------------
+
+model Skill {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  category     String?
+  synonyms     String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@map("skills")
+}

@@ -1,0 +1,287 @@
+// =============================================================================
+// Regional datasource.
+//
+// Deployed once per AWS region. Holds the business data that must stay in its
+// home region for data-residency compliance:
+//   - Account (full record; subset mirrored to global AccountDirectory)
+//   - Jobs, Pipelines, Statuses
+//   - Candidates (+ skill tags)
+//   - Applications (Candidate ↔ Job, with current status in the pipeline)
+//   - Files metadata (CVs live in regional object storage)
+//   - Regional audit log
+//   - Skills read-cache (eventually consistent from global source of truth)
+//
+// The Prisma client for this schema is instantiated N times (one per region's
+// DATABASE_URL) by the RegionRouter. All queries include `accountId` as a
+// tenant filter — enforced by guard + middleware.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/regional"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("REGIONAL_DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Accounts (regional copy — full business record)
+// -----------------------------------------------------------------------------
+
+model Account {
+  id              String   @id                // same id as AccountDirectory in global
+  name            String
+  slug            String   @unique
+  region          String                       // denormalized for convenience
+  billingEmail    String?
+  settings        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  jobs            Job[]
+  pipelines       Pipeline[]
+  candidates      Candidate[]
+  applications    Application[]
+  auditEvents     AuditEvent[]
+  files           File[]
+
+  @@map("accounts")
+}
+
+// -----------------------------------------------------------------------------
+// Pipelines (ordered statuses per-account, optionally per-job)
+// -----------------------------------------------------------------------------
+
+model Pipeline {
+  id              String   @id @default(cuid())
+  accountId       String
+  name            String                       // "Default Engineering Pipeline"
+  description     String?
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  statuses        PipelineStatus[]
+  jobs            Job[]
+
+  @@unique([accountId, name])
+  @@index([accountId])
+  @@map("pipelines")
+}
+
+model PipelineStatus {
+  id              String   @id @default(cuid())
+  pipelineId      String
+  name            String                       // "Applied", "HR Interview", ...
+  position        Int                          // order (0-based)
+  color           String?                      // hex for UI
+  category        StatusCategory @default(IN_PROGRESS)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pipeline        Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  applications    Application[]
+
+  @@unique([pipelineId, name])
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+  @@map("pipeline_statuses")
+}
+
+enum StatusCategory {
+  NEW              // e.g. "New candidate", "Applied"
+  IN_PROGRESS      // e.g. "Screening", "Interview"
+  HIRED            // terminal-success
+  DROPPED          // terminal-failure (rejected, withdrew, ghosted)
+}
+
+// -----------------------------------------------------------------------------
+// Jobs
+// -----------------------------------------------------------------------------
+
+model Job {
+  id              String   @id @default(cuid())
+  accountId       String
+  title           String
+  description     String?
+  department      String?
+  location        String?
+  employmentType  EmploymentType @default(FULL_TIME)
+  status          JobStatus      @default(DRAFT)
+  pipelineId      String
+  requiredSkillIds String[] @default([])        // referencing Skill.id from global
+  openedAt        DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pipeline        Pipeline @relation(fields: [pipelineId], references: [id])
+  applications    Application[]
+
+  @@index([accountId, status])
+  @@map("jobs")
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  ON_HOLD
+  CLOSED
+  ARCHIVED
+}
+
+// -----------------------------------------------------------------------------
+// Candidates
+// -----------------------------------------------------------------------------
+
+model Candidate {
+  id              String   @id @default(cuid())
+  accountId       String
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  headline        String?
+  location        String?
+  currentCompany  String?
+  currentTitle    String?
+  yearsExperience Int?
+  summary         String?
+  source          String?                      // e.g. "manual", "linkedin", "referral"
+  skillIds        String[] @default([])        // referencing Skill.id from global
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  applications    Application[]
+  files           File[]
+
+  @@unique([accountId, email])
+  @@index([accountId])
+  @@map("candidates")
+}
+
+// -----------------------------------------------------------------------------
+// Applications = Candidate ↔ Job (+ current pipeline status)
+// -----------------------------------------------------------------------------
+
+model Application {
+  id                 String   @id @default(cuid())
+  accountId          String
+  candidateId        String
+  jobId              String
+  currentStatusId    String
+  position           Int      @default(0)       // order within status column
+  appliedAt          DateTime @default(now())
+  lastTransitionAt   DateTime @default(now())
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  account            Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  candidate          Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job                Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  currentStatus      PipelineStatus @relation(fields: [currentStatusId], references: [id])
+  transitions        ApplicationTransition[]
+
+  @@unique([candidateId, jobId])
+  @@index([jobId, currentStatusId, position])
+  @@index([accountId])
+  @@map("applications")
+}
+
+model ApplicationTransition {
+  id              String   @id @default(cuid())
+  applicationId   String
+  fromStatusId    String?
+  toStatusId      String
+  byUserId        String                        // global user id
+  reason          String?
+  createdAt       DateTime @default(now())
+
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@map("application_transitions")
+}
+
+// -----------------------------------------------------------------------------
+// Files (CV, etc.) — metadata only; content lives in regional S3/MinIO.
+// -----------------------------------------------------------------------------
+
+model File {
+  id              String   @id @default(cuid())
+  accountId       String
+  candidateId     String?
+  kind            FileKind
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  bucket          String
+  objectKey       String
+  uploadedById    String                       // global user id
+  parsedText      String?                      // filled by CV parser worker
+  parsedAt        DateTime?
+  createdAt       DateTime @default(now())
+
+  account         Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  candidate       Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([candidateId])
+  @@map("files")
+}
+
+enum FileKind {
+  CV
+  ATTACHMENT
+  AVATAR
+}
+
+// -----------------------------------------------------------------------------
+// Audit log (regional, partitioned by account)
+// -----------------------------------------------------------------------------
+
+model AuditEvent {
+  id              String   @id @default(cuid())
+  accountId       String
+  actorUserId     String?
+  action          String                        // e.g. "application.moved", "job.created"
+  resource        String                        // e.g. "application:<id>"
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@index([resource])
+  @@map("audit_events")
+}
+
+// -----------------------------------------------------------------------------
+// Regional skill cache (read-only, replicated from global)
+// -----------------------------------------------------------------------------
+
+model SkillCache {
+  id              String   @id                 // matches global Skill.id
+  slug            String   @unique
+  name            String
+  category        String?
+  synonyms        String[] @default([])
+  updatedAt       DateTime @default(now())
+
+  @@index([category])
+  @@map("skill_cache")
+}
