@@ -1,0 +1,32 @@
+{
+  "name": "openapplicanttracking",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source, multi-tenant, multi-region Applicant Tracking System.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/szenazen/OpenApplicantTracking.git"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "db:migrate": "pnpm --filter @oat/api db:migrate",
+    "db:seed": "pnpm --filter @oat/api db:seed",
+    "clean": "turbo run clean && rm -rf node_modules .turbo"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.4",
+    "prettier": "^3.3.3"
+  }
+}

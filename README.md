@@ -1,0 +1,134 @@
+<div align="center">
+
+# OpenApplicantTracking
+
+**An open-source, multi-tenant, multi-region Applicant Tracking System.**
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+![Node](https://img.shields.io/badge/node-20%2B-green)
+![TypeScript](https://img.shields.io/badge/typescript-5.5-blue)
+
+</div>
+
+OpenApplicantTracking (OAT) is a modern ATS designed for recruitment agencies and in-house talent teams that operate **across multiple countries, accounts, and data-residency regimes**. A single user logs in once and switches between multiple **Accounts**, each of whose candidate and job data lives in the **cloud region of the customer's choice** (e.g. `us-east-1`, `eu-west-1`, `ap-southeast-1`, `ap-northeast-1`, `ap-southeast-2`).
+
+> **Status:** early development. Core APIs and the Kanban UI are functional; production hardening is ongoing. See [roadmap](#roadmap).
+
+---
+
+## Why OpenATS
+
+- **True multi-tenancy, true multi-region.** Not a region tag in a single DB — a physical datasource per region, routed per request.
+- **Global users, regional data.** One email/password. One click to switch between accounts in different regions. Your candidate data never leaves its home region.
+- **Customizable pipelines.** Every job opening can define its own ordered list of statuses. Drag candidates across columns with live WebSocket updates.
+- **Skills catalog shared globally.** Regional caches keep the skills list fast while a single source of truth governs it.
+- **Built for OSS.** Apache-2.0, conventional commits, CI, Helm charts, Terraform modules, documented architecture.
+
+---
+
+## Architecture at a glance
+
+```
+                        ┌──────────────────────────────────────┐
+                        │        Global Control Plane          │
+   ┌─── Login ────────► │  Auth · Users · Accounts · RBAC ·    │
+   │                    │  Skills (source of truth)            │
+   │                    └──────────────────────────────────────┘
+   │                                   │  (account→region map,
+   │                                   │   skills sync)
+   │                                   ▼
+   │        ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+   │        │  Region:      │  │  Region:      │  │  Region:      │
+   │        │  us-east-1    │  │  eu-west-1    │  │  ap-southeast │
+   │        │  Jobs · Pipe- │  │  Jobs · Pipe- │  │  Jobs · Pipe- │
+   │        │  lines · Cand-│  │  lines · Cand-│  │  lines · Cand-│
+   │        │  idates · Apps│  │  idates · Apps│  │  idates · Apps│
+   │        └───────────────┘  └───────────────┘  └───────────────┘
+   │
+   └── Web / Mobile BFF · Realtime Gateway (Socket.IO) · Workers (CV · Audit · Email)
+```
+
+Full diagrams live in [`design/`](./design) and the exported architecture doc is [`docs/architecture.md`](./docs/architecture.md).
+
+---
+
+## Quick start
+
+```bash
+# 1. Clone
+git clone https://github.com/szenazen/OpenApplicantTracking.git
+cd OpenApplicantTracking
+
+# 2. Install
+corepack enable
+pnpm install
+
+# 3. Boot infra (postgres x6, redis, redpanda, minio, mailhog)
+cp .env.example .env
+make up
+
+# 4. Migrate + seed (creates demo Hays accounts in US/EU/SG)
+make migrate
+make seed
+
+# 5. Run
+make dev
+# Web:      http://localhost:3000
+# API:      http://localhost:3001/api/docs    (OpenAPI / Swagger)
+# MailHog:  http://localhost:8025
+# MinIO:    http://localhost:9001  (minioadmin / minioadmin)
+```
+
+Demo login credentials are printed by `make seed`.
+
+---
+
+## Repository layout
+
+| Path | What's inside |
+| --- | --- |
+| `apps/api` | NestJS modular monolith. Modules mirror the service boundaries in the design diagram (Auth, User, Account, RBAC, Skills, Job, Pipeline, Candidate, Application, File, Notification, Audit, Realtime). |
+| `apps/web` | Next.js 14 App Router UI: login, account switcher, jobs list, Kanban board with dnd-kit + Socket.IO live updates, candidate drawer. |
+| `apps/workers` | Background workers: CV parser (pdf-parse), audit consumer, notification dispatcher. |
+| `packages/shared-types` | Shared TypeScript types + generated OpenAPI client + Zod schemas. |
+| `packages/config` | Shared `tsconfig`, ESLint, Prettier. |
+| `infra/terraform` | Multi-region AWS IaC: VPC, EKS, RDS (regional + global), MSK, S3, Route53, ACM. Add a region in one block. |
+| `infra/helm` | Helm charts for each service, deployable per region. |
+| `docs/` | `architecture.md`, `data-model.md`, `multi-region.md`, `api-contracts.md`, `runbook.md`. |
+| `design/` | Source draw.io diagrams and product requirements. |
+
+---
+
+## Deliverables mapping
+
+The original challenge asks for:
+
+| Deliverable | Where |
+| --- | --- |
+| Data Structure Design | [`docs/data-model.md`](./docs/data-model.md) · Prisma schemas in `apps/api/prisma/` · source `design/ATS-design.drawio.xml` |
+| High-Level Architecture | [`docs/architecture.md`](./docs/architecture.md) · diagram `design/ATS-design.drawio.png` |
+| API Contracts | [`docs/api-contracts.md`](./docs/api-contracts.md) · live OpenAPI at `/api/docs` |
+| Front-End Interaction & Responsiveness | [`docs/frontend.md`](./docs/frontend.md) · `apps/web/app/(dashboard)/jobs/[id]/kanban` |
+
+---
+
+## Roadmap
+
+- [x] OSS baseline (license, CoC, contributing, CI)
+- [x] Monorepo scaffolding (pnpm + turbo)
+- [ ] Data model (global + regional Prisma schemas)
+- [ ] Core API (auth, accounts, jobs, pipelines, candidates, skills)
+- [ ] Realtime Kanban (Socket.IO)
+- [ ] Web UI (login, switcher, Kanban)
+- [ ] Workers (CV parser, email, audit)
+- [ ] Terraform modules + Helm charts
+- [ ] E2E test suite (Playwright)
+- [ ] SAML / SSO (post-1.0)
+- [ ] Candidate self-service portal (post-1.0)
+
+---
+
+## License
+
+[Apache 2.0](./LICENSE) © OpenApplicantTracking contributors.

@@ -1,0 +1,168 @@
+# OpenApplicantTracking — local development infrastructure.
+#
+# Spins up:
+#   - 1 global Postgres (users, accounts directory, skills, RBAC)
+#   - 5 regional Postgres instances, one per supported AWS region
+#   - Redis (sessions, socket.io adapter, rate limiting)
+#   - Redpanda (Kafka-compatible) for domain events, audit, CV parse jobs
+#   - MinIO (S3-compatible) for CV/file storage
+#   - MailHog for SMTP invitations/notifications
+#
+# In production these are replaced by AWS RDS (per region), ElastiCache,
+# MSK, S3 and SES — see infra/terraform.
+
+name: oat
+
+x-pg-defaults: &pg-defaults
+  image: postgres:16-alpine
+  restart: unless-stopped
+  environment:
+    POSTGRES_USER: oat
+    POSTGRES_PASSWORD: oat
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U oat"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+services:
+  global-pg:
+    <<: *pg-defaults
+    container_name: oat-global-pg
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_global
+    ports: ["5432:5432"]
+    volumes: [global_pg_data:/var/lib/postgresql/data]
+
+  region-us-east-1-pg:
+    <<: *pg-defaults
+    container_name: oat-region-us-east-1
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_us_east_1
+    ports: ["5433:5432"]
+    volumes: [region_us_east_1_data:/var/lib/postgresql/data]
+
+  region-eu-west-1-pg:
+    <<: *pg-defaults
+    container_name: oat-region-eu-west-1
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_eu_west_1
+    ports: ["5434:5432"]
+    volumes: [region_eu_west_1_data:/var/lib/postgresql/data]
+
+  region-ap-southeast-1-pg:
+    <<: *pg-defaults
+    container_name: oat-region-ap-southeast-1
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_ap_southeast_1
+    ports: ["5435:5432"]
+    volumes: [region_ap_southeast_1_data:/var/lib/postgresql/data]
+
+  region-ap-northeast-1-pg:
+    <<: *pg-defaults
+    container_name: oat-region-ap-northeast-1
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_ap_northeast_1
+    ports: ["5436:5432"]
+    volumes: [region_ap_northeast_1_data:/var/lib/postgresql/data]
+
+  region-ap-southeast-2-pg:
+    <<: *pg-defaults
+    container_name: oat-region-ap-southeast-2
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_ap_southeast_2
+    ports: ["5437:5432"]
+    volumes: [region_ap_southeast_2_data:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    container_name: oat-redis
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.4
+    container_name: oat-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+    ports:
+      - "18081:18081"
+      - "18082:18082"
+      - "19092:19092"
+    volumes: [redpanda_data:/var/lib/redpanda/data]
+
+  minio:
+    image: minio/minio:latest
+    container_name: oat-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes: [minio_data:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/oat-uploads;
+      exit 0;
+      "
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: oat-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
+volumes:
+  global_pg_data:
+  region_us_east_1_data:
+  region_eu_west_1_data:
+  region_ap_southeast_1_data:
+  region_ap_northeast_1_data:
+  region_ap_southeast_2_data:
+  redis_data:
+  redpanda_data:
+  minio_data:
