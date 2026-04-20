@@ -27,8 +27,14 @@ declare module 'express' {
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthUser => {
     const req = ctx.switchToHttp().getRequest();
-    if (!req.ctx?.user) throw new Error('CurrentUser used on unauthenticated route');
-    return req.ctx.user;
+    // Passport JwtStrategy.validate() attaches the principal to req.user. We also
+    // mirror it onto req.ctx.user so downstream middleware (e.g. AccountGuard)
+    // has a single place to read it.
+    const principal: AuthUser | undefined = req.ctx?.user ?? req.user;
+    if (!principal) throw new Error('CurrentUser used on unauthenticated route');
+    req.ctx = req.ctx ?? {};
+    req.ctx.user = principal;
+    return principal;
   },
 );
 

@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 
 export interface AuthTokens {
@@ -89,7 +89,7 @@ export class AuthService {
   private async issueTokens(userId: string, email: string): Promise<AuthTokens> {
     const accessToken = await this.jwt.signAsync({ sub: userId, email });
     // Store a hashed refresh token in the sessions table.
-    const refreshRaw = nanoid(48);
+    const refreshRaw = randomBytes(36).toString('base64url');
     const refreshHash = await bcrypt.hash(refreshRaw, 8);
     const ttlDays = this.parseDays(this.config.get<string>('auth.refreshTtl', '30d'));
     await this.db.session.create({
