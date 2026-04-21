@@ -3,7 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { AccountGuard } from '../../common/account.guard';
-import { AccountId } from '../../common/request-context';
+import { AccountId, AuthUser, CurrentUser } from '../../common/request-context';
 import { JobsService } from './jobs.service';
 
 class CreateJobDto {
@@ -31,8 +31,12 @@ export class JobsController {
   }
 
   @Get(':id')
-  get(@AccountId() accountId: string, @Param('id') id: string) {
-    return this.svc.get(accountId, id);
+  get(
+    @AccountId() accountId: string,
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.svc.get(accountId, id, user.userId);
   }
 
   @Post()

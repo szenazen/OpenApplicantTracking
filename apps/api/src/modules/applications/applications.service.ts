@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+import { ReactionsService } from '../reactions/reactions.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class ApplicationsService {
     private readonly router: RegionRouterService,
     private readonly realtime: RealtimeGateway,
     private readonly global: GlobalPrismaService,
+    private readonly reactions: ReactionsService,
   ) {}
 
   /**
@@ -29,7 +31,7 @@ export class ApplicationsService {
    * Matches the APPLICATION_STATUS_HISTORY entity in design/ATS-design.drawio.xml
    * (from_status_id, to_status_id, changed_by_user_id, changed_at).
    */
-  async get(accountId: string, applicationId: string) {
+  async get(accountId: string, applicationId: string, requesterUserId: string) {
     const { client } = await this.router.forAccount(accountId);
     const application = await client.application.findFirst({
       where: { id: applicationId, accountId },
@@ -103,6 +105,11 @@ export class ApplicationsService {
       slug: cs.skill.slug,
     }));
 
+    const [commentCount, reactionSummary] = await Promise.all([
+      client.applicationComment.count({ where: { accountId, applicationId, deletedAt: null } }),
+      this.reactions.summarize(accountId, applicationId, requesterUserId),
+    ]);
+
     return {
       id: application.id,
       candidateId: application.candidateId,
@@ -117,6 +124,8 @@ export class ApplicationsService {
       job: application.job,
       currentStatus: application.currentStatus,
       transitions,
+      commentCount,
+      reactionSummary,
     };
   }
 

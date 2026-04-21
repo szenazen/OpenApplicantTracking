@@ -39,8 +39,12 @@ export class ApplicationsController {
 
   /** Fetch one application with its candidate, job, current status, and full transition history. */
   @Get(':id')
-  get(@AccountId() accountId: string, @Param('id') id: string) {
-    return this.svc.get(accountId, id);
+  get(
+    @AccountId() accountId: string,
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.svc.get(accountId, id, user.userId);
   }
 
   /**

@@ -1,24 +1,50 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import {
   ArrowRight,
   Briefcase,
   Building2,
+  Check,
   Clock,
+  type LucideIcon,
   Mail,
   MapPin,
+  Pencil,
   Phone,
+  Star,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
   X,
 } from 'lucide-react';
-import { api, ApiError, ApplicationDetail } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  ApplicationComment,
+  ApplicationDetail,
+  ReactionKind,
+  ReactionSummary,
+} from '@/lib/api';
+import { useAuth } from '@/lib/store';
 import { avatarColor, formatRelativeDuration, formatYearsExperience, getInitials } from '@/lib/format';
+
+interface ActivityPatch {
+  commentCount?: number;
+  reactionSummary?: ReactionSummary;
+}
 
 interface Props {
   /** Application id whose drawer to render. When null/undefined the drawer is closed. */
   applicationId: string | null;
   /** Fired when the drawer should close (Esc, overlay click, X button). */
   onClose: () => void;
+  /**
+   * Emitted whenever the drawer mutates server-side activity (posting a
+   * comment, toggling a reaction, etc.) so the parent page can feed the new
+   * counts into the Kanban card badges without a full refetch.
+   */
+  onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
 }
 
 /**
@@ -32,7 +58,7 @@ interface Props {
  * change from the drawer, adding notes, re-assigning) are deliberate next steps
  * tracked separately.
  */
-export function CandidateDrawer({ applicationId, onClose }: Props) {
+export function CandidateDrawer({ applicationId, onClose, onActivityChange }: Props) {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,13 +137,19 @@ export function CandidateDrawer({ applicationId, onClose }: Props) {
             {error}
           </p>
         )}
-        {detail && <DrawerBody detail={detail} />}
+        {detail && <DrawerBody detail={detail} onActivityChange={onActivityChange} />}
       </aside>
     </div>
   );
 }
 
-function DrawerBody({ detail }: { detail: ApplicationDetail }) {
+function DrawerBody({
+  detail,
+  onActivityChange,
+}: {
+  detail: ApplicationDetail;
+  onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
+}) {
   const { candidate, job, currentStatus, transitions } = detail;
   const initials = getInitials(candidate.firstName, candidate.lastName);
   const palette = avatarColor(candidate.id);
@@ -240,6 +272,18 @@ function DrawerBody({ detail }: { detail: ApplicationDetail }) {
         </section>
       )}
 
+      {/* Reactions bar + comments — HR + hiring manager collaboration. */}
+      <ReactionsBar
+        applicationId={detail.id}
+        initial={detail.reactionSummary}
+        onChange={(summary) => onActivityChange?.(detail.id, { reactionSummary: summary })}
+      />
+      <CommentsSection
+        applicationId={detail.id}
+        initialCount={detail.commentCount}
+        onCountChange={(commentCount) => onActivityChange?.(detail.id, { commentCount })}
+      />
+
       {/* Timeline */}
       <section data-testid="drawer-timeline">
         <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -260,6 +304,397 @@ function DrawerBody({ detail }: { detail: ApplicationDetail }) {
       </section>
     </div>
   );
+}
+
+/**
+ * Row of three toggle buttons (👍 / 👎 / ⭐) that reflect the viewer's own
+ * reaction state plus the aggregate count across the team. Mutations are
+ * optimistic — if the server rejects we rollback and surface the error.
+ */
+function ReactionsBar({
+  applicationId,
+  initial,
+  onChange,
+}: {
+  applicationId: string;
+  initial: ReactionSummary | undefined;
+  onChange?: (summary: ReactionSummary) => void;
+}) {
+  const [summary, setSummary] = useState<ReactionSummary>(
+    initial ?? { counts: { THUMBS_UP: 0, THUMBS_DOWN: 0, STAR: 0 }, myReactions: [] },
+  );
+  const [busy, setBusy] = useState<ReactionKind | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initial) setSummary(initial);
+  }, [initial]);
+
+  async function toggle(kind: ReactionKind) {
+    if (busy) return;
+    const mine = summary.myReactions.includes(kind);
+    const optimistic: ReactionSummary = {
+      counts: { ...summary.counts, [kind]: summary.counts[kind] + (mine ? -1 : 1) },
+      myReactions: mine ? summary.myReactions.filter((k) => k !== kind) : [...summary.myReactions, kind],
+    };
+    setSummary(optimistic);
+    setBusy(kind);
+    setErr(null);
+    try {
+      const res = await api<ReactionSummary>(
+        `/applications/${applicationId}/reactions/${kind}`,
+        { method: mine ? 'DELETE' : 'PUT' },
+      );
+      setSummary(res);
+      onChange?.(res);
+    } catch (e) {
+      setSummary(summary);
+      setErr((e as Error).message ?? 'Failed to update reaction');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section data-testid="drawer-reactions">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Team take
+      </h4>
+      <div className="flex items-center gap-2">
+        <ReactionButton
+          kind="THUMBS_UP"
+          Icon={ThumbsUp}
+          active={summary.myReactions.includes('THUMBS_UP')}
+          count={summary.counts.THUMBS_UP}
+          onClick={() => toggle('THUMBS_UP')}
+          testId="reaction-thumbs-up"
+          activeClass="bg-emerald-50 text-emerald-700 ring-emerald-300"
+        />
+        <ReactionButton
+          kind="THUMBS_DOWN"
+          Icon={ThumbsDown}
+          active={summary.myReactions.includes('THUMBS_DOWN')}
+          count={summary.counts.THUMBS_DOWN}
+          onClick={() => toggle('THUMBS_DOWN')}
+          testId="reaction-thumbs-down"
+          activeClass="bg-rose-50 text-rose-700 ring-rose-300"
+        />
+        <ReactionButton
+          kind="STAR"
+          Icon={Star}
+          active={summary.myReactions.includes('STAR')}
+          count={summary.counts.STAR}
+          onClick={() => toggle('STAR')}
+          testId="reaction-star"
+          activeClass="bg-amber-50 text-amber-700 ring-amber-300"
+        />
+      </div>
+      {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+    </section>
+  );
+}
+
+function ReactionButton({
+  Icon,
+  active,
+  count,
+  onClick,
+  testId,
+  activeClass,
+}: {
+  kind: ReactionKind;
+  Icon: LucideIcon;
+  active: boolean;
+  count: number;
+  onClick: () => void;
+  testId: string;
+  activeClass: string;
+}) {
+  const base =
+    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition-colors';
+  const idle = 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`${base} ${active ? activeClass : idle}`}
+      data-testid={testId}
+    >
+      <Icon size={12} className={active ? 'fill-current' : ''} />
+      <span className="tabular-nums">{count}</span>
+    </button>
+  );
+}
+
+/**
+ * Comments thread on the current application. Uses the same reliability
+ * patterns as {@link JobNotesPage}:
+ *   - POST carries an `Idempotency-Key`
+ *   - PATCH/DELETE echo `expectedVersion`
+ *   - 409s trigger a re-fetch rather than a silent overwrite
+ */
+function CommentsSection({
+  applicationId,
+  initialCount,
+  onCountChange,
+}: {
+  applicationId: string;
+  initialCount?: number;
+  onCountChange?: (count: number) => void;
+}) {
+  const me = useAuth((s) => s.me);
+  const [comments, setComments] = useState<ApplicationComment[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [composeBody, setComposeBody] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      const list = await api<ApplicationComment[]>(`/applications/${applicationId}/comments`);
+      setComments(list);
+      setErr(null);
+    } catch (e) {
+      setErr((e as Error).message ?? 'Failed to load comments');
+    }
+  }, [applicationId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Bubble the live comment count upward so Kanban badges stay in sync.
+  useEffect(() => {
+    if (!onCountChange) return;
+    if (comments === null) return;
+    onCountChange(comments.length);
+  }, [comments, onCountChange]);
+  void initialCount;
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    const body = composeBody.trim();
+    if (!body || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const created = await api<ApplicationComment>(`/applications/${applicationId}/comments`, {
+        method: 'POST',
+        body: { body },
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
+      });
+      setComments((prev) => (prev ? [created, ...prev] : [created]));
+      setComposeBody('');
+    } catch (e) {
+      setErr((e as Error).message ?? 'Failed to post comment');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(c: ApplicationComment) {
+    setEditingId(c.id);
+    setEditingBody(c.body);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditingBody('');
+  }
+
+  async function saveEdit(c: ApplicationComment) {
+    const body = editingBody.trim();
+    if (!body) return;
+    try {
+      const updated = await api<ApplicationComment>(`/comments/${c.id}`, {
+        method: 'PATCH',
+        body: { body, expectedVersion: c.version },
+      });
+      setComments((prev) => prev?.map((x) => (x.id === c.id ? updated : x)) ?? null);
+      cancelEdit();
+      setErr(null);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setErr('Someone else just edited this comment — refreshing.');
+        cancelEdit();
+        await refresh();
+      } else {
+        setErr((e as Error).message ?? 'Failed to update comment');
+      }
+    }
+  }
+
+  async function remove(c: ApplicationComment) {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      await api(`/comments/${c.id}?expectedVersion=${c.version}`, { method: 'DELETE' });
+      setComments((prev) => prev?.filter((x) => x.id !== c.id) ?? null);
+      setErr(null);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setErr('Someone else just edited this comment — refreshing.');
+        await refresh();
+      } else {
+        setErr((e as Error).message ?? 'Failed to delete comment');
+      }
+    }
+  }
+
+  return (
+    <section data-testid="drawer-comments">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Comments {comments ? <span className="text-slate-300">({comments.length})</span> : null}
+      </h4>
+
+      <form onSubmit={onSubmit} className="mb-3 space-y-2">
+        <textarea
+          value={composeBody}
+          onChange={(e) => setComposeBody(e.target.value)}
+          rows={2}
+          maxLength={5000}
+          placeholder="Add a comment for the hiring team…"
+          className="block w-full resize-y rounded-md border border-slate-300 px-2.5 py-1.5 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          data-testid="comment-compose"
+        />
+        <div className="flex items-center justify-end">
+          <button
+            type="submit"
+            disabled={!composeBody.trim() || saving}
+            className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="comment-submit"
+          >
+            {saving ? 'Posting…' : 'Post'}
+          </button>
+        </div>
+      </form>
+
+      {err && (
+        <p className="mb-2 rounded-md bg-rose-50 px-2 py-1 text-xs text-rose-700 ring-1 ring-inset ring-rose-200">
+          {err}
+        </p>
+      )}
+
+      {!comments ? (
+        <p className="text-xs text-slate-500">Loading…</p>
+      ) : comments.length === 0 ? (
+        <p className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">
+          No comments yet — start the conversation.
+        </p>
+      ) : (
+        <ul className="space-y-2" data-testid="comment-list">
+          {comments.map((c) => {
+            const isAuthor = me?.id === c.authorUserId;
+            const isEditing = editingId === c.id;
+            return (
+              <li
+                key={c.id}
+                className="rounded-md border border-slate-200 bg-white p-2.5"
+                data-testid="comment-item"
+              >
+                <header className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <div className="flex items-center gap-1.5">
+                    <CommentAvatar
+                      name={c.author?.displayName ?? c.author?.email ?? '?'}
+                      url={c.author?.avatarUrl}
+                    />
+                    <span className="font-medium text-slate-700">
+                      {c.author?.displayName ?? c.author?.email ?? 'Unknown'}
+                    </span>
+                    <span className="text-slate-400" title={c.createdAt}>
+                      {formatRelativeDuration(c.createdAt) || 'just now'}
+                      {c.updatedAt !== c.createdAt && ' (edited)'}
+                    </span>
+                  </div>
+                  {isAuthor && !isEditing && (
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="Edit"
+                        data-testid="comment-edit"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => remove(c)}
+                        className="rounded p-1 text-rose-400 hover:bg-rose-50"
+                        aria-label="Delete"
+                        data-testid="comment-delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </header>
+                {isEditing ? (
+                  <div className="mt-1 space-y-1.5">
+                    <textarea
+                      value={editingBody}
+                      onChange={(e) => setEditingBody(e.target.value)}
+                      rows={2}
+                      maxLength={5000}
+                      className="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      data-testid="comment-edit-input"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => saveEdit(c)}
+                        disabled={!editingBody.trim()}
+                        className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                        data-testid="comment-save"
+                      >
+                        <Check size={10} /> Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                      >
+                        <X size={10} /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800" data-testid="comment-body">
+                    {c.body}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function CommentAvatar({ name, url }: { name: string; url: string | null | undefined }) {
+  const initials = name
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} className="h-4 w-4 rounded-full object-cover" />;
+  }
+  return (
+    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700">
+      {initials || '?'}
+    </span>
+  );
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return (crypto as Crypto).randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function TimelineItem({ item }: { item: ApplicationDetail['transitions'][number] }) {

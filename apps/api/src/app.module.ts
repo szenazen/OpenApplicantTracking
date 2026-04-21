@@ -14,6 +14,8 @@ import { PipelinesModule } from './modules/pipelines/pipelines.module';
 import { CandidatesModule } from './modules/candidates/candidates.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { CommentsModule } from './modules/comments/comments.module';
+import { ReactionsModule } from './modules/reactions/reactions.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -32,6 +34,8 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     CandidatesModule,
     ApplicationsModule,
     NotesModule,
+    CommentsModule,
+    ReactionsModule,
     RealtimeModule,
   ],
 })

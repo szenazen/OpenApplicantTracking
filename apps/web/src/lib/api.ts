@@ -116,6 +116,17 @@ export interface Pipeline {
   statuses: PipelineStatus[];
 }
 
+export type ReactionKind = 'THUMBS_UP' | 'THUMBS_DOWN' | 'STAR';
+
+/**
+ * Aggregate of reactions on an application, plus the current viewer's own
+ * reactions so the UI can toggle with a single render.
+ */
+export interface ReactionSummary {
+  counts: Record<ReactionKind, number>;
+  myReactions: ReactionKind[];
+}
+
 export interface ApplicationCard {
   id: string;
   candidateId: string;
@@ -126,6 +137,10 @@ export interface ApplicationCard {
   version?: number;
   appliedAt?: string | null;
   lastTransitionAt?: string | null;
+  /** Number of non-deleted HR/hiring-manager comments on this application. */
+  commentCount?: number;
+  /** Aggregate reactions + the viewer's own state, for card badges. */
+  reactionSummary?: ReactionSummary;
   candidate: {
     id: string;
     firstName: string;
@@ -220,6 +235,29 @@ export interface ApplicationDetail {
   };
   currentStatus: PipelineStatus;
   transitions: ApplicationTransitionDetail[];
+  /** Hydrated by the API for the candidate drawer — see ApplicationsService.get. */
+  commentCount?: number;
+  reactionSummary?: ReactionSummary;
+}
+
+/**
+ * Application-scoped comment written by an HR/hiring manager.
+ * Follows the same OCC + idempotency contract as {@link JobNote}.
+ */
+export interface ApplicationComment {
+  id: string;
+  applicationId: string;
+  authorUserId: string;
+  body: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    displayName: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
 }
 
 /**

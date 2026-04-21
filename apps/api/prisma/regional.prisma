@@ -47,6 +47,8 @@ model Account {
   auditEvents     AuditEvent[]
   files           File[]
   jobNotes        JobNote[]
+  applicationComments  ApplicationComment[]
+  applicationReactions ApplicationReaction[]
 
   @@map("accounts")
 }
@@ -215,6 +217,8 @@ model Application {
   job                Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
   currentStatus      PipelineStatus @relation(fields: [currentStatusId], references: [id])
   transitions        ApplicationTransition[]
+  comments           ApplicationComment[]
+  reactions          ApplicationReaction[]
 
   @@unique([candidateId, jobId])
   @@index([jobId, currentStatusId, position])
@@ -326,6 +330,66 @@ model JobNote {
   @@index([jobId, createdAt])
   @@index([accountId])
   @@map("job_notes")
+}
+
+// -----------------------------------------------------------------------------
+// Application-scoped collaboration: comments and reactions on a specific
+// candidate's application. These complement the global-per-job Notes with
+// lighter-weight, candidate-specific feedback from HR + hiring managers.
+//
+// Reliability (mirrors JobNote):
+//   - `idempotencyKey` + unique([applicationId, idempotencyKey]) protects
+//     POSTs against double-submit on retries.
+//   - `version` is the optimistic-concurrency token used on update/delete.
+// Deletes are soft so the Activities tab can surface an "author removed a
+// comment" entry when we build it.
+// -----------------------------------------------------------------------------
+
+model ApplicationComment {
+  id              String    @id @default(cuid())
+  accountId       String
+  applicationId   String
+  authorUserId    String                           // global user id
+  body            String
+  version         Int       @default(0)
+  idempotencyKey  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  account         Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, idempotencyKey])
+  @@index([applicationId, createdAt])
+  @@index([accountId])
+  @@map("application_comments")
+}
+
+/// One reaction (thumbs-up / thumbs-down / star) per (application, user, kind).
+/// Toggling off is a DELETE. Each user can hold each kind independently — it's
+/// fine to star AND thumbs-up, but impossible to double-star.
+enum ApplicationReactionKind {
+  THUMBS_UP
+  THUMBS_DOWN
+  STAR
+}
+
+model ApplicationReaction {
+  id              String    @id @default(cuid())
+  accountId       String
+  applicationId   String
+  userId          String                           // global user id
+  kind            ApplicationReactionKind
+  createdAt       DateTime  @default(now())
+
+  account         Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, userId, kind])
+  @@index([applicationId, kind])
+  @@index([accountId])
+  @@map("application_reactions")
 }
 
 // -----------------------------------------------------------------------------

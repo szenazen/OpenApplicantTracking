@@ -9,7 +9,7 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd';
 import { io, Socket } from 'socket.io-client';
-import { Briefcase, Clock, Eye, MoreVertical } from 'lucide-react';
+import { Briefcase, Clock, Eye, MessageSquare, MoreVertical, Star, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api, ApplicationCard, Pipeline, PipelineStatus } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { avatarColor, formatRelativeDuration, formatYearsExperience, getInitials } from '@/lib/format';
@@ -26,6 +26,13 @@ interface Props {
    * distinguished from a drag by the library's own threshold.
    */
   onOpenCard?: (applicationId: string) => void;
+  /**
+   * Keyed per-card partial updates from outside the board — e.g. the candidate
+   * drawer mutates commentCount / reactionSummary and we want the Kanban
+   * badges to reflect that without a full re-fetch. Changes to this map cause
+   * matching cards to be patched in place.
+   */
+  cardOverrides?: Record<string, Partial<ApplicationCard>>;
 }
 
 /** Pixels from the horizontal edge where auto-scroll should engage during a drag. */
@@ -40,10 +47,31 @@ const AUTOSCROLL_MAX_PX_PER_FRAME = 18;
  *   - socket.io subscription to application.moved so other tabs/browsers
  *     watching the same job see moves in real time.
  */
-export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange, onOpenCard }: Props) {
+export function KanbanBoard({
+  jobId,
+  pipeline,
+  initialCards,
+  onCardsChange,
+  onOpenCard,
+  cardOverrides,
+}: Props) {
   const { token, activeAccountId } = useAuth();
   const [cards, setCards] = useState<ApplicationCard[]>(initialCards);
   const [error, setError] = useState<string | null>(null);
+
+  // Merge external card overrides (e.g. comment / reaction counts from the
+  // drawer) into our local list. We only patch when the incoming snapshot
+  // actually differs to avoid render churn.
+  useEffect(() => {
+    if (!cardOverrides) return;
+    setCards((prev) =>
+      prev.map((c) => {
+        const patch = cardOverrides[c.id];
+        if (!patch) return c;
+        return { ...c, ...patch };
+      }),
+    );
+  }, [cardOverrides]);
   // Horizontal scroll container ref (for autoscroll-during-drag).
   const scrollRef = useRef<HTMLDivElement>(null);
   // State flags used to drive scroll-on-drag; refs avoid re-renders during drag.
@@ -386,7 +414,63 @@ function CandidateCardBody({ card }: { card: ApplicationCard }) {
             )}
           </div>
         )}
+        <CardBadges card={card} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bottom row showing comment + reaction badges. Hidden entirely when the card
+ * has no activity — keeps unexplored cards visually quiet.
+ */
+function CardBadges({ card }: { card: ApplicationCard }) {
+  const comments = card.commentCount ?? 0;
+  const counts = card.reactionSummary?.counts ?? { THUMBS_UP: 0, THUMBS_DOWN: 0, STAR: 0 };
+  const mine = new Set(card.reactionSummary?.myReactions ?? []);
+  const hasAny = comments > 0 || counts.THUMBS_UP > 0 || counts.THUMBS_DOWN > 0 || counts.STAR > 0;
+  if (!hasAny) return null;
+  return (
+    <div
+      className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500"
+      data-testid="kanban-card-badges"
+    >
+      {comments > 0 && (
+        <span
+          className="inline-flex items-center gap-1"
+          data-testid="kanban-card-comments"
+          title={`${comments} comment${comments === 1 ? '' : 's'}`}
+        >
+          <MessageSquare size={11} /> {comments}
+        </span>
+      )}
+      {counts.STAR > 0 && (
+        <span
+          className={`inline-flex items-center gap-1 ${mine.has('STAR') ? 'text-amber-600' : ''}`}
+          data-testid="kanban-card-star"
+          title={`${counts.STAR} star${counts.STAR === 1 ? '' : 's'}`}
+        >
+          <Star size={11} className={mine.has('STAR') ? 'fill-current' : ''} /> {counts.STAR}
+        </span>
+      )}
+      {counts.THUMBS_UP > 0 && (
+        <span
+          className={`inline-flex items-center gap-1 ${mine.has('THUMBS_UP') ? 'text-emerald-600' : ''}`}
+          data-testid="kanban-card-thumbs-up"
+          title={`${counts.THUMBS_UP} thumbs up`}
+        >
+          <ThumbsUp size={11} className={mine.has('THUMBS_UP') ? 'fill-current' : ''} /> {counts.THUMBS_UP}
+        </span>
+      )}
+      {counts.THUMBS_DOWN > 0 && (
+        <span
+          className={`inline-flex items-center gap-1 ${mine.has('THUMBS_DOWN') ? 'text-rose-600' : ''}`}
+          data-testid="kanban-card-thumbs-down"
+          title={`${counts.THUMBS_DOWN} thumbs down`}
+        >
+          <ThumbsDown size={11} className={mine.has('THUMBS_DOWN') ? 'fill-current' : ''} /> {counts.THUMBS_DOWN}
+        </span>
+      )}
     </div>
   );
 }
