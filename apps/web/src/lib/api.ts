@@ -88,11 +88,13 @@ export interface LoginResponse {
 export interface JobSummary {
   id: string;
   title: string;
+  description?: string | null;
   department?: string | null;
   location?: string | null;
   employmentType?: string | null;
   status: string;
   pipelineId: string;
+  requiredSkillIds?: string[];
   openedAt?: string | null;
 }
 

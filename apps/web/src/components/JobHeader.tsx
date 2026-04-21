@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ArrowLeft, Briefcase, Building2, MapPin, MoreHorizontal } from 'lucide-react';
 import type { ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
@@ -9,6 +10,14 @@ interface Props {
   job: JobSummary;
   pipeline: Pipeline;
   applications: ApplicationCard[];
+}
+
+interface TabDef {
+  label: string;
+  /** Sub-path under `/dashboard/jobs/[id]` — '' means Candidates (root). */
+  subpath: string;
+  badge?: number;
+  testId?: string;
 }
 
 /**
@@ -25,6 +34,19 @@ interface Props {
  */
 export function JobHeader({ job, pipeline, applications }: Props) {
   const counts = useMemo(() => summarize(pipeline, applications), [pipeline, applications]);
+  const pathname = usePathname() ?? '';
+  const jobRoot = `/dashboard/jobs/${job.id}`;
+  const tabs: TabDef[] = [
+    { label: 'Candidates', subpath: '', badge: applications.length, testId: 'tab-candidates' },
+    { label: 'Summary', subpath: '/summary', testId: 'tab-summary' },
+    { label: 'Team', subpath: '/team', testId: 'tab-team' },
+    { label: 'Recommendations', subpath: '/recommendations', testId: 'tab-recommendations' },
+    { label: 'Activities', subpath: '/activities', testId: 'tab-activities' },
+    { label: 'Notes', subpath: '/notes', testId: 'tab-notes' },
+    { label: 'Attachments', subpath: '/attachments', testId: 'tab-attachments' },
+    { label: 'Sourcing', subpath: '/sourcing', testId: 'tab-sourcing' },
+    { label: 'Reports', subpath: '/reports', testId: 'tab-reports' },
+  ];
 
   return (
     <div className="border-b border-slate-200 bg-white px-6 pt-3">
@@ -93,11 +115,20 @@ export function JobHeader({ job, pipeline, applications }: Props) {
       </div>
 
       <nav className="mt-3 -mb-px flex items-center gap-4 overflow-x-auto text-sm" aria-label="Job sections">
-        <TabLink active label="Candidates" badge={applications.length} testId="tab-candidates" />
-        <TabLink label="Summary" disabled />
-        <TabLink label="Activities" disabled />
-        <TabLink label="Notes" disabled />
-        <TabLink label="Attachments" disabled />
+        {tabs.map((t) => {
+          const href = jobRoot + t.subpath;
+          const active = t.subpath === '' ? pathname === jobRoot : pathname.startsWith(href);
+          return (
+            <TabLink
+              key={t.label}
+              label={t.label}
+              href={href}
+              badge={t.badge}
+              active={active}
+              testId={t.testId}
+            />
+          );
+        })}
       </nav>
     </div>
   );
@@ -161,25 +192,28 @@ function SummaryTile({
 
 function TabLink({
   label,
+  href,
   badge,
   active,
-  disabled,
   testId,
 }: {
   label: string;
+  href: string;
   badge?: number;
   active?: boolean;
-  disabled?: boolean;
   testId?: string;
 }) {
   const base = 'inline-flex items-center gap-1 whitespace-nowrap border-b-2 px-1 pb-2 pt-1 transition-colors';
   const state = active
     ? 'border-brand-600 text-brand-700 font-semibold'
-    : disabled
-      ? 'border-transparent text-slate-400 cursor-not-allowed'
-      : 'border-transparent text-slate-600 hover:text-slate-900';
+    : 'border-transparent text-slate-600 hover:text-slate-900';
   return (
-    <span className={`${base} ${state}`} aria-current={active ? 'page' : undefined} data-testid={testId}>
+    <Link
+      href={href}
+      className={`${base} ${state}`}
+      aria-current={active ? 'page' : undefined}
+      data-testid={testId}
+    >
       {label}
       {badge !== undefined && badge > 0 && (
         <span
@@ -191,7 +225,7 @@ function TabLink({
           {badge}
         </span>
       )}
-    </span>
+    </Link>
   );
 }
 
