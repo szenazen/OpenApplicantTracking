@@ -95,7 +95,7 @@ Demo login credentials are printed by `make seed`.
 | `packages/config` | Shared `tsconfig`, ESLint, Prettier. |
 | `infra/terraform` | Multi-region AWS IaC: VPC, EKS, RDS (regional + global), MSK, S3, Route53, ACM. Add a region in one block. |
 | `infra/helm` | Helm charts for each service, deployable per region. |
-| `docs/` | `architecture.md`, `data-model.md`, `multi-region.md`, `api-contracts.md`, `runbook.md`. |
+| `docs/` | [`data-model.md`](./docs/data-model.md), [`runbook.md`](./docs/runbook.md), architecture decision records in [`docs/adr/`](./docs/adr). |
 | `design/` | Source draw.io diagrams and product requirements. |
 
 ---
@@ -107,9 +107,9 @@ The original challenge asks for:
 | Deliverable | Where |
 | --- | --- |
 | Data Structure Design | [`docs/data-model.md`](./docs/data-model.md) · Prisma schemas in `apps/api/prisma/` · source `design/ATS-design.drawio.xml` |
-| High-Level Architecture | [`docs/architecture.md`](./docs/architecture.md) · diagram `design/ATS-design.drawio.png` |
-| API Contracts | [`docs/api-contracts.md`](./docs/api-contracts.md) · live OpenAPI at `/api/docs` |
-| Front-End Interaction & Responsiveness | [`docs/frontend.md`](./docs/frontend.md) · `apps/web/app/(dashboard)/jobs/[id]/kanban` |
+| High-Level Architecture | [`docs/adr/0001-multi-region-data-residency.md`](./docs/adr/0001-multi-region-data-residency.md) · diagram `design/ATS-design.drawio.png` |
+| API Contracts | Live OpenAPI at `http://localhost:3001/api/docs` after `pnpm --filter @oat/api dev` |
+| Front-End Interaction & Responsiveness | `apps/web/src/app/dashboard/jobs/[id]/page.tsx` + `apps/web/src/components/KanbanBoard.tsx` · ADR [`0002-realtime-kanban-via-socketio.md`](./docs/adr/0002-realtime-kanban-via-socketio.md) |
 
 ---
 
@@ -117,15 +117,37 @@ The original challenge asks for:
 
 - [x] OSS baseline (license, CoC, contributing, CI)
 - [x] Monorepo scaffolding (pnpm + turbo)
-- [ ] Data model (global + regional Prisma schemas)
-- [ ] Core API (auth, accounts, jobs, pipelines, candidates, skills)
-- [ ] Realtime Kanban (Socket.IO)
-- [ ] Web UI (login, switcher, Kanban)
+- [x] Data model (global + regional Prisma schemas)
+- [x] Core API (auth, accounts, jobs, pipelines, candidates, skills)
+- [x] Realtime Kanban (Socket.IO)
+- [x] Web UI (login, switcher, Kanban)
+- [x] E2E test suite (Playwright — auth, account switching, Kanban drag + DB persist, cross-browser realtime sync)
+- [x] CI (lint/typecheck + api jest + playwright e2e in GH Actions)
 - [ ] Workers (CV parser, email, audit)
 - [ ] Terraform modules + Helm charts
-- [ ] E2E test suite (Playwright)
 - [ ] SAML / SSO (post-1.0)
 - [ ] Candidate self-service portal (post-1.0)
+
+---
+
+## Running the tests
+
+```bash
+# One-time: bring up infra + migrate + seed
+make up && make migrate && make seed
+
+# Backend integration tests (Jest + supertest)
+pnpm --filter @oat/api test          # 22 tests
+
+# Frontend end-to-end (Playwright, chromium)
+# (expects api on :3001 and web on :3000)
+pnpm --filter @oat/api dev &          # or: node --env-file=.env apps/api/dist/main.js
+pnpm --filter @oat/web dev &
+pnpm --filter @oat/web exec playwright install chromium   # first run only
+pnpm --filter @oat/web exec playwright test               # 4 tests
+```
+
+CI runs all of the above on every push / PR — see `.github/workflows/ci.yml`.
 
 ---
 
