@@ -6,6 +6,11 @@ import { ArrowLeft } from 'lucide-react';
 import { api, ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
 import { KanbanBoard } from '@/components/KanbanBoard';
 
+type JobWithApplications = JobSummary & {
+  pipeline: Pipeline;
+  applications: ApplicationCard[];
+};
+
 export default function JobBoardPage({ params }: { params: { id: string } }) {
   const [job, setJob] = useState<JobSummary | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
@@ -14,17 +19,12 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      api<JobSummary>(`/jobs/${params.id}`),
-      api<{ applications: ApplicationCard[] }>(`/jobs/${params.id}/applications`),
-    ])
-      .then(async ([j, apps]) => {
+    api<JobWithApplications>(`/jobs/${params.id}`)
+      .then((j) => {
         if (cancelled) return;
         setJob(j);
-        const p = await api<Pipeline>(`/pipelines/${j.pipelineId}`);
-        if (cancelled) return;
-        setPipeline(p);
-        setCards(apps.applications ?? (apps as any));
+        setPipeline(j.pipeline);
+        setCards(j.applications ?? []);
       })
       .catch((e) => setErr(e.message ?? 'Failed to load job'));
     return () => {

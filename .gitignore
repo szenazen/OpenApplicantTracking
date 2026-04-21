@@ -60,3 +60,7 @@ docker-compose.override.yml
 # IDE / tooling (local only)
 .windsurf/
 .cursor/
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/

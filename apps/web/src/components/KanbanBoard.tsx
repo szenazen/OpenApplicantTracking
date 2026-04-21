@@ -39,22 +39,36 @@ export function KanbanBoard({ jobId, pipeline, initialCards }: Props) {
   // Socket.IO subscription.
   useEffect(() => {
     if (!token || !activeAccountId) return;
-    const socket: Socket = io('/', {
+    // Connect directly to the API origin (Next.js rewrites don't proxy WebSocket upgrades).
+    const apiOrigin = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const socket: Socket = io(apiOrigin, {
       path: '/realtime',
       auth: { token, accountId: activeAccountId },
       transports: ['websocket', 'polling'],
     });
-    socket.emit('job.subscribe', { jobId });
-    socket.on('application.moved', (evt: {
-      applicationId: string;
-      fromStatusId: string;
-      toStatusId: string;
-      toPosition: number;
+    socket.emit('subscribe', { accountId: activeAccountId, jobId });
+    socket.on('application.change', (evt: {
+      type: 'moved' | 'created';
+      application: ApplicationCard;
+      fromStatusId?: string;
+      toStatusId?: string;
+      toPosition?: number;
     }) => {
-      setCards((prev) => reconcileMove(prev, evt));
+      if (evt.type === 'moved' && evt.fromStatusId && evt.toStatusId && typeof evt.toPosition === 'number') {
+        setCards((prev) =>
+          reconcileMove(prev, {
+            applicationId: evt.application.id,
+            fromStatusId: evt.fromStatusId!,
+            toStatusId: evt.toStatusId!,
+            toPosition: evt.toPosition!,
+          }),
+        );
+      } else if (evt.type === 'created') {
+        setCards((prev) => (prev.some((c) => c.id === evt.application.id) ? prev : [...prev, evt.application]));
+      }
     });
     return () => {
-      socket.emit('job.unsubscribe', { jobId });
+      socket.emit('unsubscribe', { accountId: activeAccountId, jobId });
       socket.disconnect();
     };
   }, [token, activeAccountId, jobId]);
