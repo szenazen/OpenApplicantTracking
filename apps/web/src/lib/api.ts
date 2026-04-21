@@ -153,6 +153,29 @@ export interface ApplicationTransitionDetail {
   byUserAvatarUrl: string | null;
 }
 
+/**
+ * Row shape returned by GET /candidates — drives the dedicated Candidates
+ * list view. `applicationCounts.active` excludes pipeline statuses in
+ * categories HIRED and DROPPED so it matches the recruiter's mental model
+ * of "open work".
+ */
+export interface CandidateListItem {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  headline?: string | null;
+  location?: string | null;
+  currentCompany?: string | null;
+  currentTitle?: string | null;
+  yearsExperience?: number | null;
+  source?: string | null;
+  createdAt: string;
+  applicationCounts: { total: number; active: number };
+  skills: Array<{ skillId: string; name: string; level: number | null }>;
+}
+
 /** Full application payload returned by GET /applications/:id — drives the candidate drawer. */
 export interface ApplicationDetail {
   id: string;

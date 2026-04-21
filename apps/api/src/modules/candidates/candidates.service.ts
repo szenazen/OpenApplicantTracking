@@ -29,9 +29,18 @@ export interface CreateCandidateInput {
 export class CandidatesService {
   constructor(private readonly router: RegionRouterService) {}
 
+  /**
+   * List candidates for the Candidates page. We enrich each row with:
+   *   - `applicationCounts.{total, active}` — active = the candidate has at
+   *     least one application whose pipeline status is not HIRED/DROPPED.
+   *   - `skills` — flattened (skillId, name, level) tuples for chip rendering.
+   *
+   * `active` is how recruiters typically scan their pipeline ("who should I
+   * follow up with?"), so we surface it as a first-class column.
+   */
   async list(accountId: string, query?: { q?: string }) {
     const { client } = await this.router.forAccount(accountId);
-    return client.candidate.findMany({
+    const rows = await client.candidate.findMany({
       where: {
         accountId,
         ...(query?.q
@@ -44,8 +53,29 @@ export class CandidatesService {
             }
           : {}),
       },
+      include: {
+        applications: {
+          select: { id: true, currentStatus: { select: { category: true } } },
+        },
+        skills: {
+          select: { skillId: true, level: true, skill: { select: { name: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
+    });
+
+    return rows.map(({ applications, skills, ...scalar }) => {
+      const total = applications.length;
+      const active = applications.filter(
+        (a) => a.currentStatus.category !== 'HIRED' && a.currentStatus.category !== 'DROPPED',
+      ).length;
+      return {
+        ...scalar,
+        applicationCounts: { total, active },
+        skills: skills.map((s) => ({ skillId: s.skillId, level: s.level, name: s.skill.name })),
+      };
     });
   }
 
