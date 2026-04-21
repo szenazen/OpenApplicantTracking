@@ -300,6 +300,40 @@ export interface CandidateImportResponse {
   deduped: boolean;
 }
 
+/** A resolved skill (id + display name) from the regional skill cache. */
+export interface SkillRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * One recommended candidate for a job, with the explainable score and the
+ * matched / missing skill breakdown so the UI can show *why* they rank.
+ */
+export interface RecommendedCandidate {
+  candidate: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    headline: string | null;
+    location: string | null;
+    currentCompany: string | null;
+    currentTitle: string | null;
+    yearsExperience: number | null;
+    updatedAt: string;
+  };
+  score: number;
+  matchedSkills: SkillRef[];
+  missingSkills: SkillRef[];
+}
+
+export interface RecommendationsResponse {
+  jobId: string;
+  requiredSkills: SkillRef[];
+  candidates: RecommendedCandidate[];
+}
+
 /**
  * Job-level collaborator — matches `JobMember` in regional.prisma.
  * The `role` is the enum value (`OWNER`, `RECRUITER`, ...); the UI translates
