@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
@@ -29,6 +29,12 @@ export class ApplicationsController {
   @Post()
   apply(@AccountId() accountId: string, @CurrentUser() user: AuthUser, @Body() dto: CreateApplicationDto) {
     return this.svc.apply(accountId, dto, user.userId);
+  }
+
+  /** Fetch one application with its candidate, job, current status, and full transition history. */
+  @Get(':id')
+  get(@AccountId() accountId: string, @Param('id') id: string) {
+    return this.svc.get(accountId, id);
   }
 
   @Patch(':id/move')

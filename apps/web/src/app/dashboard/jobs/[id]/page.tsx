@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { JobHeader } from '@/components/JobHeader';
+import { CandidateDrawer } from '@/components/CandidateDrawer';
 
 type JobWithApplications = JobSummary & {
   pipeline: Pipeline;
@@ -19,6 +20,8 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
   // canonical state (avoids re-render churn breaking drag), and reports changes
   // via an observer callback below.
   const [liveCards, setLiveCards] = useState<ApplicationCard[]>([]);
+  // Id of the application whose drawer is currently open (null = closed).
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,6 +45,14 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
     setLiveCards(cards);
   }, []);
 
+  const handleOpenCard = useCallback((applicationId: string) => {
+    setSelectedAppId(applicationId);
+  }, []);
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedAppId(null);
+  }, []);
+
   if (err) return <p className="p-6 text-sm text-red-700">{err}</p>;
   if (!job || !pipeline || !initialCards) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
@@ -53,7 +64,9 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
         pipeline={pipeline}
         initialCards={initialCards}
         onCardsChange={handleCardsChange}
+        onOpenCard={handleOpenCard}
       />
+      <CandidateDrawer applicationId={selectedAppId} onClose={handleCloseDrawer} />
     </div>
   );
 }

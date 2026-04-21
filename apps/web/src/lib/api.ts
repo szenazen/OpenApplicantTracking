@@ -130,3 +130,56 @@ export interface ApplicationCard {
     location?: string | null;
   };
 }
+
+/**
+ * A single pipeline transition, matching the APPLICATION_STATUS_HISTORY table
+ * in `design/ATS-design.drawio.xml` (plus the server-resolved name/display fields).
+ */
+export interface ApplicationTransitionDetail {
+  id: string;
+  createdAt: string;
+  reason?: string | null;
+  fromStatusId: string | null;
+  toStatusId: string;
+  fromStatusName: string | null;
+  toStatusName: string | null;
+  byUserId: string;
+  byUserDisplayName: string | null;
+  byUserAvatarUrl: string | null;
+}
+
+/** Full application payload returned by GET /applications/:id — drives the candidate drawer. */
+export interface ApplicationDetail {
+  id: string;
+  candidateId: string;
+  jobId: string;
+  currentStatusId: string;
+  position: number;
+  appliedAt: string;
+  lastTransitionAt: string;
+  notes?: string | null;
+  candidate: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+    headline?: string | null;
+    location?: string | null;
+    currentCompany?: string | null;
+    currentTitle?: string | null;
+    yearsExperience?: number | null;
+    summary?: string | null;
+    source?: string | null;
+    skillIds?: string[];
+  };
+  job: {
+    id: string;
+    title: string;
+    department?: string | null;
+    location?: string | null;
+    pipelineId: string;
+  };
+  currentStatus: PipelineStatus;
+  transitions: ApplicationTransitionDetail[];
+}

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
@@ -7,7 +8,87 @@ export class ApplicationsService {
   constructor(
     private readonly router: RegionRouterService,
     private readonly realtime: RealtimeGateway,
+    private readonly global: GlobalPrismaService,
   ) {}
+
+  /**
+   * Load a single application together with enough context to render the
+   * candidate drawer on the Kanban page:
+   *   - candidate (full record)
+   *   - job (title/department/location)
+   *   - current status
+   *   - transition history, ordered chronologically, enriched with
+   *       • fromStatusName / toStatusName  (looked up in the same pipeline)
+   *       • byUserDisplayName              (resolved from the global user table)
+   *
+   * Matches the APPLICATION_STATUS_HISTORY entity in design/ATS-design.drawio.xml
+   * (from_status_id, to_status_id, changed_by_user_id, changed_at).
+   */
+  async get(accountId: string, applicationId: string) {
+    const { client } = await this.router.forAccount(accountId);
+    const application = await client.application.findFirst({
+      where: { id: applicationId, accountId },
+      include: {
+        candidate: true,
+        job: { select: { id: true, title: true, department: true, location: true, pipelineId: true } },
+        currentStatus: true,
+        transitions: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+
+    // Resolve status id → name for from/to using the job's pipeline.
+    const statusIds = new Set<string>();
+    for (const t of application.transitions) {
+      if (t.fromStatusId) statusIds.add(t.fromStatusId);
+      statusIds.add(t.toStatusId);
+    }
+    const statuses = statusIds.size
+      ? await client.pipelineStatus.findMany({
+          where: { id: { in: Array.from(statusIds) } },
+          select: { id: true, name: true, category: true, color: true },
+        })
+      : [];
+    const statusById = new Map(statuses.map((s) => [s.id, s] as const));
+
+    // Resolve actor user ids → display name from the global user table.
+    const userIds = Array.from(new Set(application.transitions.map((t) => t.byUserId))).filter(Boolean);
+    const users = userIds.length
+      ? await this.global.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, displayName: true, email: true, avatarUrl: true },
+        })
+      : [];
+    const userById = new Map(users.map((u) => [u.id, u] as const));
+
+    const transitions = application.transitions.map((t) => ({
+      id: t.id,
+      createdAt: t.createdAt,
+      reason: t.reason,
+      fromStatusId: t.fromStatusId,
+      toStatusId: t.toStatusId,
+      fromStatusName: t.fromStatusId ? statusById.get(t.fromStatusId)?.name ?? null : null,
+      toStatusName: statusById.get(t.toStatusId)?.name ?? null,
+      byUserId: t.byUserId,
+      byUserDisplayName: userById.get(t.byUserId)?.displayName ?? null,
+      byUserAvatarUrl: userById.get(t.byUserId)?.avatarUrl ?? null,
+    }));
+
+    return {
+      id: application.id,
+      candidateId: application.candidateId,
+      jobId: application.jobId,
+      currentStatusId: application.currentStatusId,
+      position: application.position,
+      appliedAt: application.appliedAt,
+      lastTransitionAt: application.lastTransitionAt,
+      notes: application.notes,
+      candidate: application.candidate,
+      job: application.job,
+      currentStatus: application.currentStatus,
+      transitions,
+    };
+  }
 
   /** Create a candidate↔job application. Places at bottom of the pipeline's first status (category = NEW). */
   async apply(accountId: string, input: { candidateId: string; jobId: string; statusId?: string }, actorUserId: string) {

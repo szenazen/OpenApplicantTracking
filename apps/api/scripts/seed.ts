@@ -242,7 +242,7 @@ async function main() {
           const pos = await regional.application.count({
             where: { jobId: job.id, currentStatusId: status.id },
           });
-          await regional.application.upsert({
+          const application = await regional.application.upsert({
             where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
             update: {},
             create: {
@@ -253,6 +253,24 @@ async function main() {
               position: pos,
             },
           });
+          // Design (APPLICATION_STATUS_HISTORY) expects a transition row for
+          // every state change — including the initial "null → <status>"
+          // creation event. ApplicationsService.apply writes this for real
+          // applies; seed data would otherwise have an empty audit trail.
+          const existingCreate = await regional.applicationTransition.findFirst({
+            where: { applicationId: application.id, fromStatusId: null },
+            select: { id: true },
+          });
+          if (!existingCreate) {
+            await regional.applicationTransition.create({
+              data: {
+                applicationId: application.id,
+                fromStatusId: null,
+                toStatusId: status.id,
+                byUserId: user.id,
+              },
+            });
+          }
         }
       }
     } finally {

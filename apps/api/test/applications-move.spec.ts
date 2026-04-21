@@ -252,4 +252,63 @@ describe('Applications.move (integration)', () => {
       .send({ toStatusId: statusIds.a, toPosition: 0 })
       .expect(404);
   });
+
+  // ---------------------------------------------------------------------------
+  // GET /applications/:id — drives the candidate drawer in the Kanban page.
+  //
+  // Contract:
+  //   1. Returns the application with candidate, job, currentStatus, transitions.
+  //   2. Transitions are ordered ascending by createdAt, with from/to status NAMES
+  //      resolved from the job's pipeline (not just raw ids).
+  //   3. Each transition is enriched with the actor's display name resolved from
+  //      the GLOBAL user table (cross-datasource join).
+  //   4. 404 when the application belongs to another account / doesn't exist.
+  //   5. 403 without x-account-id (AccountGuard).
+  // ---------------------------------------------------------------------------
+  describe('GET /applications/:id', () => {
+    it('returns candidate, job, current status, and full transition history', async () => {
+      // apps[1] went A → B earlier in this spec, so it should have at least 2 transitions.
+      const res = await request(app.getHttpServer())
+        .get(`/applications/${apps[1]!.id}`)
+        .set(headers())
+        .expect(200);
+
+      expect(res.body.id).toBe(apps[1]!.id);
+      expect(res.body.currentStatusId).toBe(statusIds.b);
+      expect(res.body.candidate).toMatchObject({ firstName: 'C' });
+      expect(res.body.job).toMatchObject({ id: jobId, title: 'Kanban Role' });
+      expect(res.body.currentStatus).toMatchObject({ name: 'B' });
+
+      expect(Array.isArray(res.body.transitions)).toBe(true);
+      expect(res.body.transitions.length).toBeGreaterThanOrEqual(2);
+
+      // Creation transition: fromStatusId === null, toStatusName === 'A'.
+      const first = res.body.transitions[0];
+      expect(first.fromStatusId).toBeNull();
+      expect(first.fromStatusName).toBeNull();
+      expect(first.toStatusName).toBe('A');
+
+      // Last transition: A → B with resolved names.
+      const last = res.body.transitions[res.body.transitions.length - 1];
+      expect(last.fromStatusName).toBe('A');
+      expect(last.toStatusName).toBe('B');
+      expect(typeof last.byUserId).toBe('string');
+      // We registered the owner with displayName 'Kanban Owner' — it MUST be resolved.
+      expect(last.byUserDisplayName).toBe('Kanban Owner');
+    });
+
+    it('returns 404 for an unknown application id', async () => {
+      await request(app.getHttpServer())
+        .get('/applications/does-not-exist')
+        .set(headers())
+        .expect(404);
+    });
+
+    it('returns 403 without x-account-id', async () => {
+      await request(app.getHttpServer())
+        .get(`/applications/${apps[1]!.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
+    });
+  });
 });

@@ -1,7 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DragStart,
+  type DropResult,
+} from '@hello-pangea/dnd';
 import { io, Socket } from 'socket.io-client';
 import { Briefcase, Clock, Eye, MoreVertical } from 'lucide-react';
 import { api, ApplicationCard, Pipeline, PipelineStatus } from '@/lib/api';
@@ -14,7 +20,18 @@ interface Props {
   initialCards: ApplicationCard[];
   /** Optional observer fired whenever the local card list changes (used by the header). */
   onCardsChange?: (cards: ApplicationCard[]) => void;
+  /**
+   * Called when a card is clicked (not dragged). Wire this to open the
+   * candidate drawer in the parent page. A quick click-without-movement is
+   * distinguished from a drag by the library's own threshold.
+   */
+  onOpenCard?: (applicationId: string) => void;
 }
+
+/** Pixels from the horizontal edge where auto-scroll should engage during a drag. */
+const AUTOSCROLL_EDGE_PX = 80;
+/** Max auto-scroll velocity in px/frame (applied when the cursor is at the very edge). */
+const AUTOSCROLL_MAX_PX_PER_FRAME = 18;
 
 /**
  * Live Kanban board:
@@ -23,10 +40,17 @@ interface Props {
  *   - socket.io subscription to application.moved so other tabs/browsers
  *     watching the same job see moves in real time.
  */
-export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Props) {
+export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange, onOpenCard }: Props) {
   const { token, activeAccountId } = useAuth();
   const [cards, setCards] = useState<ApplicationCard[]>(initialCards);
   const [error, setError] = useState<string | null>(null);
+  // Horizontal scroll container ref (for autoscroll-during-drag).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // State flags used to drive scroll-on-drag; refs avoid re-renders during drag.
+  const draggingRef = useRef(false);
+  const pointerXRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
   // Notify the parent (e.g. JobHeader) about card-list changes after render
   // so pipeline summary tiles stay in sync with drags + socket events.
   useEffect(() => {
@@ -83,6 +107,7 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Pr
   }, [token, activeAccountId, jobId]);
 
   async function onDragEnd(result: DropResult) {
+    stopAutoscroll();
     const { source, destination, draggableId } = result;
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
@@ -107,6 +132,75 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Pr
     }
   }
 
+  // -------------------- Auto-scroll during drag --------------------
+  //
+  // @hello-pangea/dnd supplies its own autoscroll for window scroll, but our
+  // columns live inside a horizontally-overflowing flex container, which the
+  // library doesn't know about. We track the pointer while a drag is active
+  // and scroll the container when the cursor approaches either edge.
+  function onDragStart(_start: DragStart) {
+    draggingRef.current = true;
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    rafRef.current = window.requestAnimationFrame(autoscrollTick);
+  }
+
+  function stopAutoscroll() {
+    draggingRef.current = false;
+    pointerXRef.current = null;
+    window.removeEventListener('mousemove', handlePointerMove);
+    window.removeEventListener('touchmove', handleTouchMove);
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }
+
+  function handlePointerMove(e: MouseEvent) {
+    pointerXRef.current = e.clientX;
+  }
+  function handleTouchMove(e: TouchEvent) {
+    if (e.touches.length) pointerXRef.current = e.touches[0]!.clientX;
+  }
+
+  function autoscrollTick() {
+    const el = scrollRef.current;
+    const x = pointerXRef.current;
+    if (draggingRef.current && el && x !== null) {
+      const rect = el.getBoundingClientRect();
+      const distLeft = x - rect.left;
+      const distRight = rect.right - x;
+      let delta = 0;
+      if (distLeft < AUTOSCROLL_EDGE_PX) {
+        const strength = Math.max(0, (AUTOSCROLL_EDGE_PX - distLeft) / AUTOSCROLL_EDGE_PX);
+        delta = -Math.ceil(strength * AUTOSCROLL_MAX_PX_PER_FRAME);
+      } else if (distRight < AUTOSCROLL_EDGE_PX) {
+        const strength = Math.max(0, (AUTOSCROLL_EDGE_PX - distRight) / AUTOSCROLL_EDGE_PX);
+        delta = Math.ceil(strength * AUTOSCROLL_MAX_PX_PER_FRAME);
+      }
+      if (delta !== 0) el.scrollLeft += delta;
+    }
+    if (draggingRef.current) {
+      rafRef.current = window.requestAnimationFrame(autoscrollTick);
+    }
+  }
+
+  // Safety net: always release listeners on unmount.
+  // `stopAutoscroll` only reads refs + window, so it's stable enough to not
+  // list as a dep; we deliberately want this to run exactly once on unmount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopAutoscroll(), []);
+
+  // -------------------- Card click --------------------
+  //
+  // A mousedown+mouseup with no significant movement is treated as a click
+  // by @hello-pangea/dnd, so a vanilla onClick here fires on click but not
+  // on drag. We still swallow clicks that come from within obvious
+  // interactive areas (links etc.) to avoid double navigation.
+  function handleCardClick(applicationId: string) {
+    onOpenCard?.(applicationId);
+  }
+
   return (
     <div className="flex h-full flex-col" data-testid="kanban-board">
       {error && (
@@ -114,8 +208,8 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Pr
           {error}
         </div>
       )}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto p-6">
+      <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div ref={scrollRef} className="flex flex-1 gap-3 overflow-x-auto p-6" data-testid="kanban-scroll">
           {pipeline.statuses.map((s) => (
             <Droppable droppableId={s.id} key={s.id}>
               {(provided, snapshot) => (
@@ -139,13 +233,20 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Pr
                             {...drag.draggableProps}
                             {...drag.dragHandleProps}
                             className={
-                              'group rounded-lg border bg-white p-3 shadow-sm transition-shadow ' +
+                              'group cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-shadow ' +
                               (dragSnapshot.isDragging
                                 ? 'border-brand-500 shadow-md'
                                 : 'border-slate-200 hover:border-brand-500 hover:shadow')
                             }
                             data-testid="kanban-card"
                             data-card-id={card.id}
+                            onClick={() => handleCardClick(card.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleCardClick(card.id);
+                              }
+                            }}
                           >
                             <CandidateCardBody card={card} />
                           </li>
