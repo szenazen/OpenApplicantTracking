@@ -60,7 +60,7 @@ export class CommentsService {
   ) {
     const body = normalizeBody(input.body);
     const { client } = await this.router.forAccount(accountId);
-    await this.assertApplication(client, accountId, applicationId);
+    const { jobId } = await this.assertApplication(client, accountId, applicationId);
 
     if (idempotencyKey) {
       const prior = await client.applicationComment.findUnique({
@@ -88,7 +88,7 @@ export class CommentsService {
           actorUserId,
           action: 'comment.created',
           resource: `comment:${row.id}`,
-          metadata: { applicationId, commentId: row.id },
+          metadata: { jobId, applicationId, commentId: row.id },
         },
       });
       return row;
@@ -109,6 +109,7 @@ export class CommentsService {
 
     const current = await client.applicationComment.findFirst({
       where: { id: commentId, accountId, deletedAt: null },
+      include: { application: { select: { jobId: true } } },
     });
     if (!current) throw new NotFoundException('Comment not found');
     if (current.authorUserId !== actorUserId) {
@@ -133,7 +134,12 @@ export class CommentsService {
           actorUserId,
           action: 'comment.updated',
           resource: `comment:${commentId}`,
-          metadata: { applicationId: current.applicationId, commentId, version: next.version },
+          metadata: {
+            jobId: current.application.jobId,
+            applicationId: current.applicationId,
+            commentId,
+            version: next.version,
+          },
         },
       });
       return next;
@@ -152,6 +158,7 @@ export class CommentsService {
     const { client } = await this.router.forAccount(accountId);
     const current = await client.applicationComment.findFirst({
       where: { id: commentId, accountId, deletedAt: null },
+      include: { application: { select: { jobId: true } } },
     });
     if (!current) throw new NotFoundException('Comment not found');
     if (current.authorUserId !== actorUserId) {
@@ -176,7 +183,11 @@ export class CommentsService {
           actorUserId,
           action: 'comment.deleted',
           resource: `comment:${commentId}`,
-          metadata: { applicationId: current.applicationId, commentId },
+          metadata: {
+            jobId: current.application.jobId,
+            applicationId: current.applicationId,
+            commentId,
+          },
         },
       });
     });
@@ -188,12 +199,13 @@ export class CommentsService {
     client: Awaited<ReturnType<RegionRouterService['forAccount']>>['client'],
     accountId: string,
     applicationId: string,
-  ) {
+  ): Promise<{ id: string; jobId: string }> {
     const hit = await client.application.findFirst({
       where: { id: applicationId, accountId },
-      select: { id: true },
+      select: { id: true, jobId: true },
     });
     if (!hit) throw new NotFoundException('Application not found');
+    return hit;
   }
 
   private async hydrateAuthors<T extends { authorUserId: string }>(

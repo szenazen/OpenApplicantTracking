@@ -261,6 +261,35 @@ export interface ApplicationComment {
 }
 
 /**
+ * One entry in the job activity feed.
+ *
+ * Union view over `AuditEvent` — every domain mutation (application move,
+ * comment/reaction, note, etc.) shows up here. `action` is a dotted kind
+ * (e.g. `"application.moved"`) and `metadata` carries the event's payload
+ * (e.g. `{ fromStatusId, toStatusId }`).
+ */
+export interface ActivityEntry {
+  id: string;
+  createdAt: string;
+  action: string;
+  resource: string;
+  actorUserId: string | null;
+  actor: {
+    id: string;
+    displayName: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ActivityPage {
+  entries: ActivityEntry[];
+  /** ISO cursor; pass as `?before=` for the next page. `null` at the tail. */
+  nextBefore: string | null;
+}
+
+/**
  * Job-scoped collaboration note — see `JobNote` in regional.prisma.
  *
  * `version` is the optimistic-concurrency token: PATCH / DELETE must echo it

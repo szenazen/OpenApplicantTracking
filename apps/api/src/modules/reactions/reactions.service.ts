@@ -62,7 +62,7 @@ export class ReactionsService {
   /** PUT: add my reaction if not present. Idempotent — no 409 on retry. */
   async add(accountId: string, applicationId: string, kind: ReactionKind, userId: string) {
     const { client } = await this.router.forAccount(accountId);
-    await this.assertApplication(client, accountId, applicationId);
+    const { jobId } = await this.assertApplication(client, accountId, applicationId);
 
     await client.$transaction(async (tx) => {
       const existing = await tx.applicationReaction.findUnique({
@@ -78,7 +78,7 @@ export class ReactionsService {
           actorUserId: userId,
           action: 'reaction.added',
           resource: `application:${applicationId}`,
-          metadata: { applicationId, kind },
+          metadata: { jobId, applicationId, kind },
         },
       });
     });
@@ -89,7 +89,7 @@ export class ReactionsService {
   /** DELETE: remove my reaction if present. Idempotent. */
   async remove(accountId: string, applicationId: string, kind: ReactionKind, userId: string) {
     const { client } = await this.router.forAccount(accountId);
-    await this.assertApplication(client, accountId, applicationId);
+    const { jobId } = await this.assertApplication(client, accountId, applicationId);
 
     await client.$transaction(async (tx) => {
       const existing = await tx.applicationReaction.findUnique({
@@ -103,7 +103,7 @@ export class ReactionsService {
           actorUserId: userId,
           action: 'reaction.removed',
           resource: `application:${applicationId}`,
-          metadata: { applicationId, kind },
+          metadata: { jobId, applicationId, kind },
         },
       });
     });
@@ -115,12 +115,13 @@ export class ReactionsService {
     client: Awaited<ReturnType<RegionRouterService['forAccount']>>['client'],
     accountId: string,
     applicationId: string,
-  ) {
+  ): Promise<{ id: string; jobId: string }> {
     const hit = await client.application.findFirst({
       where: { id: applicationId, accountId },
-      select: { id: true },
+      select: { id: true, jobId: true },
     });
     if (!hit) throw new NotFoundException('Application not found');
+    return hit;
   }
 }
 

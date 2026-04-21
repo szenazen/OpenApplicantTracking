@@ -311,7 +311,14 @@ export class ApplicationsService {
           actorUserId,
           action: 'application.moved',
           resource: `application:${applicationId}`,
-          metadata: { fromStatusId, toStatusId, toPosition: toPos, version: moved.version },
+          metadata: {
+            jobId: current.jobId,
+            applicationId,
+            fromStatusId,
+            toStatusId,
+            toPosition: toPos,
+            version: moved.version,
+          },
         },
       });
 
