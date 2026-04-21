@@ -120,4 +120,29 @@ export class AccountsService {
       role: membership.role.name,
     };
   }
+
+  /**
+   * List the active members of an account along with their role, for UIs that
+   * pick a user (e.g. the "add to job team" picker). Only returns members the
+   * caller is allowed to see — guarded by AccountGuard which already verifies
+   * the caller has an ACTIVE membership on the same account.
+   */
+  async listMembers(accountId: string) {
+    const rows = await this.globalDb.membership.findMany({
+      where: { accountId, status: 'ACTIVE' },
+      include: {
+        user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+        role: { select: { name: true } },
+      },
+      orderBy: [{ role: { name: 'asc' } }, { createdAt: 'asc' }],
+    });
+    return rows.map((m) => ({
+      userId: m.user.id,
+      displayName: m.user.displayName,
+      email: m.user.email,
+      avatarUrl: m.user.avatarUrl,
+      role: m.role.name,
+      status: m.status,
+    }));
+  }
 }

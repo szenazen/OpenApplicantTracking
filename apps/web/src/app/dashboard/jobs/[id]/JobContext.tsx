@@ -1,16 +1,17 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
+import type { ApplicationCard, JobMember, JobSummary, Pipeline } from '@/lib/api';
 
 /**
  * Shared job state for every tab under `/dashboard/jobs/[id]/*`.
  *
  * The layout fetches the job once (the API already returns pipeline +
- * applications together) and exposes it through this context so tab pages
- * don't double-fetch. The Candidates tab additionally mutates
+ * applications + team together) and exposes it through this context so tab
+ * pages don't double-fetch. The Candidates tab additionally mutates
  * `liveApplications` as cards are dragged so the header summary tiles can
- * stay in sync.
+ * stay in sync. The Team tab mutates `members` so the header avatar chips
+ * stay current without a reload.
  */
 export interface JobContextValue {
   job: JobSummary;
@@ -20,6 +21,9 @@ export interface JobContextValue {
   /** Latest in-memory snapshot (Kanban publishes here on drag/socket events). */
   liveApplications: ApplicationCard[];
   setLiveApplications: (cards: ApplicationCard[]) => void;
+  /** Team members on this job — owned by the layout, updated by the Team tab. */
+  members: JobMember[];
+  setMembers: (members: JobMember[]) => void;
 }
 
 const Ctx = createContext<JobContextValue | null>(null);

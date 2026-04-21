@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ArrowLeft, Briefcase, Building2, MapPin, MoreHorizontal } from 'lucide-react';
-import type { ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
+import type { ApplicationCard, JobMember, JobSummary, Pipeline } from '@/lib/api';
 
 interface Props {
   job: JobSummary;
   pipeline: Pipeline;
   applications: ApplicationCard[];
+  members?: JobMember[];
 }
 
 interface TabDef {
@@ -32,14 +33,14 @@ interface TabDef {
  *   - Below: a secondary tab bar with Candidates active (other tabs shown as
  *     disabled placeholders for now — they are on the roadmap).
  */
-export function JobHeader({ job, pipeline, applications }: Props) {
+export function JobHeader({ job, pipeline, applications, members }: Props) {
   const counts = useMemo(() => summarize(pipeline, applications), [pipeline, applications]);
   const pathname = usePathname() ?? '';
   const jobRoot = `/dashboard/jobs/${job.id}`;
   const tabs: TabDef[] = [
     { label: 'Candidates', subpath: '', badge: applications.length, testId: 'tab-candidates' },
     { label: 'Summary', subpath: '/summary', testId: 'tab-summary' },
-    { label: 'Team', subpath: '/team', testId: 'tab-team' },
+    { label: 'Team', subpath: '/team', badge: members?.length, testId: 'tab-team' },
     { label: 'Recommendations', subpath: '/recommendations', testId: 'tab-recommendations' },
     { label: 'Activities', subpath: '/activities', testId: 'tab-activities' },
     { label: 'Notes', subpath: '/notes', testId: 'tab-notes' },
@@ -92,6 +93,7 @@ export function JobHeader({ job, pipeline, applications }: Props) {
                 <Briefcase size={12} /> {humanizeEmploymentType(job.employmentType)}
               </span>
             )}
+            {members && members.length > 0 && <TeamChips members={members} jobRoot={jobRoot} />}
           </div>
         </div>
 
@@ -132,6 +134,77 @@ export function JobHeader({ job, pipeline, applications }: Props) {
       </nav>
     </div>
   );
+}
+
+/**
+ * Compact stacked-avatar chip group linking to the Team tab.
+ *
+ * Shows up to 4 avatars; overflow is rendered as a "+N" chip so large teams
+ * don't bloat the header. The whole row is a link so a single click jumps to
+ * the full team management UI.
+ */
+function TeamChips({ members, jobRoot }: { members: JobMember[]; jobRoot: string }) {
+  const visible = members.slice(0, 4);
+  const overflow = members.length - visible.length;
+  return (
+    <Link
+      href={`${jobRoot}/team`}
+      className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-1.5 py-0.5 hover:bg-slate-50"
+      aria-label={`Team: ${members.length} member${members.length === 1 ? '' : 's'}`}
+      data-testid="team-chips"
+    >
+      <span className="-space-x-1.5 flex items-center">
+        {visible.map((m) => (
+          <TeamAvatar key={m.id} member={m} />
+        ))}
+      </span>
+      {overflow > 0 && (
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-600 ring-2 ring-white">
+          +{overflow}
+        </span>
+      )}
+      <span className="text-[11px] font-medium text-slate-600 group-hover:text-slate-800">
+        {members.length} on team
+      </span>
+    </Link>
+  );
+}
+
+function TeamAvatar({ member }: { member: JobMember }) {
+  const name = member.user?.displayName ?? member.user?.email ?? '?';
+  const initials = name
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
+  const title = `${name} — ${humanizeRole(member.role)}`;
+  if (member.user?.avatarUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={member.user.avatarUrl}
+        alt={name}
+        title={title}
+        className="h-5 w-5 rounded-full object-cover ring-2 ring-white"
+      />
+    );
+  }
+  return (
+    <span
+      title={title}
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700 ring-2 ring-white"
+    >
+      {initials || '?'}
+    </span>
+  );
+}
+
+function humanizeRole(role: string): string {
+  return role
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function JobStatusPill({ status }: { status: string }) {

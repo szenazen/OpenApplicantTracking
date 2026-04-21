@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { ReactionsService } from '../reactions/reactions.service';
+import { JobMembersService } from '../job-members/job-members.service';
 
 export interface CreateJobInput {
   title: string;
@@ -17,6 +18,7 @@ export class JobsService {
   constructor(
     private readonly router: RegionRouterService,
     private readonly reactions: ReactionsService,
+    private readonly members: JobMembersService,
   ) {}
 
   async list(accountId: string) {
@@ -49,7 +51,7 @@ export class JobsService {
     if (!job) throw new NotFoundException('Job not found');
 
     const appIds = job.applications.map((a) => a.id);
-    const [commentCounts, reactionByApp] = await Promise.all([
+    const [commentCounts, reactionByApp, members] = await Promise.all([
       appIds.length
         ? client.applicationComment.groupBy({
             by: ['applicationId'],
@@ -58,6 +60,7 @@ export class JobsService {
           })
         : Promise.resolve([] as Array<{ applicationId: string; _count: { _all: number } }>),
       this.reactions.summarizeMany(accountId, appIds, requesterUserId),
+      this.members.listForJob(accountId, jobId),
     ]);
     const commentCountByApp = new Map(commentCounts.map((c) => [c.applicationId, c._count._all] as const));
 
@@ -67,7 +70,7 @@ export class JobsService {
       reactionSummary: reactionByApp.get(a.id) ?? { counts: { THUMBS_UP: 0, THUMBS_DOWN: 0, STAR: 0 }, myReactions: [] },
     }));
 
-    return { ...job, applications };
+    return { ...job, applications, members };
   }
 
   async create(accountId: string, input: CreateJobInput) {

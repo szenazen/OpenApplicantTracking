@@ -261,6 +261,38 @@ export interface ApplicationComment {
 }
 
 /**
+ * Job-level collaborator — matches `JobMember` in regional.prisma.
+ * The `role` is the enum value (`OWNER`, `RECRUITER`, ...); the UI translates
+ * to human-friendly labels.
+ */
+export type JobMemberRole = 'OWNER' | 'RECRUITER' | 'HIRING_MANAGER' | 'INTERVIEWER' | 'OBSERVER';
+
+export interface JobMember {
+  id: string;
+  jobId: string;
+  userId: string;
+  role: JobMemberRole;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
+/** Account-level member — returned by `GET /accounts/current/members`, drives the picker. */
+export interface AccountMember {
+  userId: string;
+  displayName: string | null;
+  email: string;
+  avatarUrl: string | null;
+  role: string;
+  status: string;
+}
+
+/**
  * One entry in the job activity feed.
  *
  * Union view over `AuditEvent` — every domain mutation (application move,

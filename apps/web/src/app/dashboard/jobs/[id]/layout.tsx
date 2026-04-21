@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
+import { api, ApplicationCard, JobMember, JobSummary, Pipeline } from '@/lib/api';
 import { JobHeader } from '@/components/JobHeader';
 import { JobProvider } from './JobContext';
 
 type JobWithApplications = JobSummary & {
   pipeline: Pipeline;
   applications: ApplicationCard[];
+  members?: JobMember[];
 };
 
 /**
@@ -27,6 +28,7 @@ export default function JobLayout({
 }) {
   const [data, setData] = useState<JobWithApplications | null>(null);
   const [live, setLive] = useState<ApplicationCard[]>([]);
+  const [members, setMembers] = useState<JobMember[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function JobLayout({
         if (cancelled) return;
         setData(j);
         setLive(j.applications ?? []);
+        setMembers(j.members ?? []);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -59,10 +62,17 @@ export default function JobLayout({
         initialApplications: data.applications ?? [],
         liveApplications: live,
         setLiveApplications: setLive,
+        members,
+        setMembers,
       }}
     >
       <div className="flex h-full flex-col">
-        <JobHeader job={data} pipeline={data.pipeline} applications={live} />
+        <JobHeader
+          job={data}
+          pipeline={data.pipeline}
+          applications={live}
+          members={members}
+        />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </JobProvider>

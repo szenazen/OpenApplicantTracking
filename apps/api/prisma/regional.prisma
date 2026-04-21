@@ -47,6 +47,7 @@ model Account {
   auditEvents     AuditEvent[]
   files           File[]
   jobNotes        JobNote[]
+  jobMembers      JobMember[]
   applicationComments  ApplicationComment[]
   applicationReactions ApplicationReaction[]
 
@@ -125,6 +126,7 @@ model Job {
   pipeline        Pipeline @relation(fields: [pipelineId], references: [id])
   applications    Application[]
   notes           JobNote[]
+  members         JobMember[]
 
   @@index([accountId, status])
   @@map("jobs")
@@ -390,6 +392,42 @@ model ApplicationReaction {
   @@index([applicationId, kind])
   @@index([accountId])
   @@map("application_reactions")
+}
+
+// -----------------------------------------------------------------------------
+// Job members — job-level collaborators (recruiters, hiring managers, etc.).
+//
+// Distinct from account-level Memberships in the global DB: a user can be a
+// member of the account without being on every job's hiring committee. The
+// `role` is a free-form string with a small recommended vocabulary on the
+// frontend so we can evolve without a migration.
+// -----------------------------------------------------------------------------
+
+enum JobMemberRole {
+  OWNER            // accountable for the requisition end-to-end
+  RECRUITER
+  HIRING_MANAGER
+  INTERVIEWER
+  OBSERVER
+}
+
+model JobMember {
+  id              String         @id @default(cuid())
+  accountId       String
+  jobId           String
+  userId          String                              // global user id
+  role            JobMemberRole  @default(RECRUITER)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdBy       String?                             // global user id who added them
+
+  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  job             Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([accountId])
+  @@index([jobId])
+  @@map("job_members")
 }
 
 // -----------------------------------------------------------------------------
