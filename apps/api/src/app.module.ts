@@ -13,6 +13,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { PipelinesModule } from './modules/pipelines/pipelines.module';
 import { CandidatesModule } from './modules/candidates/candidates.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
+import { NotesModule } from './modules/notes/notes.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     PipelinesModule,
     CandidatesModule,
     ApplicationsModule,
+    NotesModule,
     RealtimeModule,
   ],
 })

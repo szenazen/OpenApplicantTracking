@@ -46,6 +46,7 @@ model Account {
   applications    Application[]
   auditEvents     AuditEvent[]
   files           File[]
+  jobNotes        JobNote[]
 
   @@map("accounts")
 }
@@ -121,6 +122,7 @@ model Job {
   account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   pipeline        Pipeline @relation(fields: [pipelineId], references: [id])
   applications    Application[]
+  notes           JobNote[]
 
   @@index([accountId, status])
   @@map("jobs")
@@ -291,6 +293,39 @@ model AuditEvent {
   @@index([accountId, createdAt])
   @@index([resource])
   @@map("audit_events")
+}
+
+// -----------------------------------------------------------------------------
+// Job notes (free-form collaboration notes attached to a job opening).
+//
+// Follows the reliability callouts in design/ATS-design.drawio.xml (Notes):
+//   - `idempotencyKey` + unique([jobId, idempotencyKey]) protects against
+//     duplicate creates on user retries.
+//   - `version` is the optimistic-concurrency token used on update/delete
+//     to prevent silent overwrites between collaborators.
+// Deletes are soft (`deletedAt`) so the Activities feed can still reference
+// authored-then-removed notes.
+// -----------------------------------------------------------------------------
+
+model JobNote {
+  id              String    @id @default(cuid())
+  accountId       String
+  jobId           String
+  authorUserId    String                           // global user id
+  body            String                           // plain text / markdown
+  version         Int       @default(0)
+  idempotencyKey  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  job             Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, idempotencyKey])
+  @@index([jobId, createdAt])
+  @@index([accountId])
+  @@map("job_notes")
 }
 
 // -----------------------------------------------------------------------------

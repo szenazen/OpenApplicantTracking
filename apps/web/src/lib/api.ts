@@ -221,3 +221,26 @@ export interface ApplicationDetail {
   currentStatus: PipelineStatus;
   transitions: ApplicationTransitionDetail[];
 }
+
+/**
+ * Job-scoped collaboration note — see `JobNote` in regional.prisma.
+ *
+ * `version` is the optimistic-concurrency token: PATCH / DELETE must echo it
+ * back in `expectedVersion` to avoid silent overwrites. The server also
+ * accepts an `Idempotency-Key` header on POST to dedupe retries.
+ */
+export interface JobNote {
+  id: string;
+  jobId: string;
+  authorUserId: string;
+  body: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    displayName: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+}
