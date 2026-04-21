@@ -20,7 +20,7 @@ export default function JobsPage() {
   }, [activeAccountId]);
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight">Jobs</h1>
       </div>

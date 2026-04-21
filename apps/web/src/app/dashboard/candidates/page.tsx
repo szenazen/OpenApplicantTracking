@@ -57,7 +57,7 @@ export default function CandidatesPage() {
   }, [rows, q]);
 
   return (
-    <div className="mx-auto max-w-6xl p-6" data-testid="candidates-page">
+    <div className="p-6" data-testid="candidates-page">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Candidates</h1>

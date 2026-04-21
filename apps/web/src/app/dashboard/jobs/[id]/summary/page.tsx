@@ -25,7 +25,7 @@ export default function JobSummaryPage() {
 
   return (
     <div className="overflow-auto p-6" data-testid="job-summary-page">
-      <div className="mx-auto grid max-w-5xl gap-6">
+      <div className="grid gap-6">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800">Overview</h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
@@ -50,7 +50,7 @@ export default function JobSummaryPage() {
             </span>
           </div>
           <p
-            className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700"
+            className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-slate-700"
             data-testid="job-description"
           >
             {job.description?.trim() ? job.description : <em className="text-slate-400">No description provided yet.</em>}

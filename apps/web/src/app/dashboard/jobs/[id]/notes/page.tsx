@@ -110,7 +110,7 @@ export default function JobNotesPage() {
 
   return (
     <div className="overflow-auto p-6" data-testid="job-notes-page">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="max-w-3xl space-y-4">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800">Add a note</h2>
           <form onSubmit={onSubmit} className="mt-2 space-y-2">
