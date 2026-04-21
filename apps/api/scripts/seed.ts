@@ -200,9 +200,12 @@ async function main() {
         { title: `Full-Stack Developer — ${acc.region}`, dept: 'Engineering' },
       ];
       for (const jt of jobTitles) {
+        // Idempotent seed: if the job exists we keep it (to preserve ids the
+        // user might already be linked to), otherwise create it. In both
+        // cases we still re-run the candidate + candidate_skills loop below
+        // so newly introduced tables (e.g. candidate_skills) get populated.
         const existing = await regional.job.findFirst({ where: { accountId: dir.id, title: jt.title } });
-        if (existing) continue;
-        const job = await regional.job.create({
+        const job = existing ?? (await regional.job.create({
           data: {
             accountId: dir.id,
             title: jt.title,
@@ -213,7 +216,7 @@ async function main() {
             openedAt: new Date(),
             requiredSkillIds: skills.slice(0, 4).map((s) => s.id),
           },
-        });
+        }));
 
         // Five candidates + spread them across statuses
         const names = [
@@ -235,9 +238,21 @@ async function main() {
               location: acc.region,
               yearsExperience: 3 + i,
               source: 'seed',
-              skillIds: skills.slice(i, i + 3).map((s) => s.id),
             },
           });
+          // Populate CANDIDATE_SKILLS (junction) with a spread of levels so the
+          // drawer has something realistic to render.
+          const candidateSkills = skills.slice(i, i + 3).map((s, idx) => ({
+            candidateId: candidate.id,
+            skillId: s.id,
+            level: ((i + idx) % 5) + 1,
+          }));
+          if (candidateSkills.length) {
+            await regional.candidateSkill.createMany({
+              data: candidateSkills,
+              skipDuplicates: true,
+            });
+          }
           const status = pipeline.statuses[i % pipeline.statuses.length]!;
           const pos = await regional.application.count({
             where: { jobId: job.id, currentStatusId: status.id },

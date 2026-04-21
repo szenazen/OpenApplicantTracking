@@ -177,7 +177,14 @@ export interface ApplicationDetail {
     yearsExperience?: number | null;
     summary?: string | null;
     source?: string | null;
-    skillIds?: string[];
+    /** Flattened CANDIDATE_SKILLS rows — name + optional 1..5 level. */
+    skills?: Array<{
+      skillId: string;
+      name: string;
+      category?: string | null;
+      slug?: string | null;
+      level?: number | null;
+    }>;
   };
   job: {
     id: string;

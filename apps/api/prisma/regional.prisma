@@ -160,17 +160,34 @@ model Candidate {
   yearsExperience Int?
   summary         String?
   source          String?                      // e.g. "manual", "linkedin", "referral"
-  skillIds        String[] @default([])        // referencing Skill.id from global
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   applications    Application[]
   files           File[]
+  skills          CandidateSkill[]
 
   @@unique([accountId, email])
   @@index([accountId])
   @@map("candidates")
+}
+
+// Junction table between Candidate and the regional Skill cache — matches the
+// CANDIDATE_SKILLS entity in design/ATS-design.drawio.xml. `level` is an
+// optional self-assessed 1..5 proficiency score.
+model CandidateSkill {
+  candidateId String
+  skillId     String
+  level       Int?                              // 1..5 proficiency (nullable = unscored)
+  createdAt   DateTime @default(now())
+
+  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skill       SkillCache @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([candidateId, skillId])
+  @@index([skillId])
+  @@map("candidate_skills")
 }
 
 // -----------------------------------------------------------------------------
@@ -287,6 +304,8 @@ model SkillCache {
   category        String?
   synonyms        String[] @default([])
   updatedAt       DateTime @default(now())
+
+  candidates      CandidateSkill[]
 
   @@index([category])
   @@map("skill_cache")

@@ -219,6 +219,27 @@ function DrawerBody({ detail }: { detail: ApplicationDetail }) {
         </section>
       )}
 
+      {/* Skills — renders CANDIDATE_SKILLS from the design (name + optional
+          1..5 proficiency dots). */}
+      {candidate.skills && candidate.skills.length > 0 && (
+        <section data-testid="drawer-skills">
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Skills</h4>
+          <ul className="flex flex-wrap gap-1.5">
+            {candidate.skills.map((s) => (
+              <li
+                key={s.skillId}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+                title={s.level ? `Proficiency: ${s.level}/5` : undefined}
+                data-testid="drawer-skill-chip"
+              >
+                <span className="truncate">{s.name}</span>
+                {s.level != null && <SkillLevelDots level={s.level} />}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Timeline */}
       <section data-testid="drawer-timeline">
         <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -272,6 +293,26 @@ function TimelineItem({ item }: { item: ApplicationDetail['transitions'][number]
       </div>
       {item.reason && <p className="mt-1 text-xs text-slate-500">“{item.reason}”</p>}
     </li>
+  );
+}
+
+/** Tiny 1..5 proficiency indicator. Small enough to sit inline in a chip. */
+function SkillLevelDots({ level }: { level: number }) {
+  const clamped = Math.max(1, Math.min(5, Math.round(level)));
+  return (
+    <span
+      className="ml-0.5 flex gap-0.5"
+      aria-label={`Proficiency ${clamped} out of 5`}
+      data-testid="drawer-skill-level"
+    >
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={`h-1 w-1 rounded-full ${i <= clamped ? 'bg-brand-600' : 'bg-slate-300'}`}
+        />
+      ))}
+    </span>
   );
 }
 

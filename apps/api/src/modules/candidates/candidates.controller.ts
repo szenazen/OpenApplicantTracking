@@ -1,10 +1,28 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsEmail, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEmail,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { AccountGuard } from '../../common/account.guard';
 import { AccountId } from '../../common/request-context';
 import { CandidatesService } from './candidates.service';
+
+class CandidateSkillDto {
+  @IsString() @MinLength(1) skillId!: string;
+  /** Self-assessed 1..5 proficiency; null/undefined = unscored. */
+  @IsOptional() @IsInt() @Min(1) @Max(5) level?: number | null;
+}
 
 class CreateCandidateDto {
   @IsString() @MinLength(1) firstName!: string;
@@ -18,7 +36,13 @@ class CreateCandidateDto {
   @IsOptional() @IsInt() @Min(0) yearsExperience?: number;
   @IsOptional() @IsString() summary?: string;
   @IsOptional() @IsString() source?: string;
-  @IsOptional() @IsArray() skillIds?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(50) skillIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CandidateSkillDto)
+  skills?: CandidateSkillDto[];
 }
 
 @ApiTags('candidates')

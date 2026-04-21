@@ -50,6 +50,15 @@ test.describe('Kanban candidate drawer', () => {
     // Timeline must have at least one entry (the creation transition).
     const timelineItems = drawer.getByTestId('drawer-timeline-item');
     expect(await timelineItems.count()).toBeGreaterThan(0);
+
+    // Seeded candidates have 3 skills with levels (see apps/api/scripts/seed.ts),
+    // so the drawer must render the CANDIDATE_SKILLS chips.
+    const skills = drawer.getByTestId('drawer-skills');
+    await expect(skills).toBeVisible();
+    const skillChips = skills.getByTestId('drawer-skill-chip');
+    expect(await skillChips.count()).toBeGreaterThan(0);
+    // At least one chip renders a proficiency indicator.
+    expect(await skills.getByTestId('drawer-skill-level').count()).toBeGreaterThan(0);
   });
 
   test('Escape closes the drawer', async ({ page }) => {

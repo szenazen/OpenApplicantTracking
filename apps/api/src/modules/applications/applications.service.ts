@@ -34,7 +34,19 @@ export class ApplicationsService {
     const application = await client.application.findFirst({
       where: { id: applicationId, accountId },
       include: {
-        candidate: true,
+        candidate: {
+          include: {
+            // Include the CANDIDATE_SKILLS junction with the cached skill
+            // record so the drawer can render (name, level) chips without a
+            // second round-trip to the global catalog.
+            skills: {
+              include: {
+                skill: { select: { id: true, name: true, category: true, slug: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
         job: { select: { id: true, title: true, department: true, location: true, pipelineId: true } },
         currentStatus: true,
         transitions: { orderBy: { createdAt: 'asc' } },
@@ -79,6 +91,18 @@ export class ApplicationsService {
       byUserAvatarUrl: userById.get(t.byUserId)?.avatarUrl ?? null,
     }));
 
+    // Flatten the junction rows into a UI-friendly list. We intentionally
+    // peel `skills` off the raw candidate object so the response shape
+    // matches the ApplicationDetail TypeScript interface on the web side.
+    const { skills: candidateSkillRows, ...candidateScalar } = application.candidate;
+    const candidateSkills = candidateSkillRows.map((cs) => ({
+      skillId: cs.skillId,
+      level: cs.level,
+      name: cs.skill.name,
+      category: cs.skill.category,
+      slug: cs.skill.slug,
+    }));
+
     return {
       id: application.id,
       candidateId: application.candidateId,
@@ -89,7 +113,7 @@ export class ApplicationsService {
       appliedAt: application.appliedAt,
       lastTransitionAt: application.lastTransitionAt,
       notes: application.notes,
-      candidate: application.candidate,
+      candidate: { ...candidateScalar, skills: candidateSkills },
       job: application.job,
       currentStatus: application.currentStatus,
       transitions,

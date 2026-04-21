@@ -310,6 +310,48 @@ describe('Applications.move (integration)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(403);
     });
+
+    it('includes candidate skills (name + level) from the CANDIDATE_SKILLS junction', async () => {
+      // Pull two real skill ids from the regional skill cache so the junction
+      // relation is satisfied. If the skill cache is empty in this env, skip.
+      const cached = await regional.skillCache.findMany({ take: 2, orderBy: { name: 'asc' } });
+      if (cached.length < 2) {
+        console.warn('[applications-move] skill_cache empty — run pnpm db:seed. Skipping skills assertion.');
+        return;
+      }
+      const cand = await request(app.getHttpServer())
+        .post('/candidates')
+        .set(headers())
+        .send({
+          firstName: 'Skilled',
+          lastName: `Candidate-${suffix}`,
+          skills: [
+            { skillId: cached[0]!.id, level: 3 },
+            { skillId: cached[1]!.id },
+          ],
+        })
+        .expect(201);
+
+      const appRes = await request(app.getHttpServer())
+        .post('/applications')
+        .set(headers())
+        .send({ candidateId: cand.body.id, jobId })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/applications/${appRes.body.id}`)
+        .set(headers())
+        .expect(200);
+
+      expect(Array.isArray(res.body.candidate.skills)).toBe(true);
+      expect(res.body.candidate.skills).toHaveLength(2);
+      const bySkill = new Map(
+        (res.body.candidate.skills as Array<{ skillId: string; name: string; level: number | null }>)
+          .map((s) => [s.skillId, s] as const),
+      );
+      expect(bySkill.get(cached[0]!.id)).toMatchObject({ name: cached[0]!.name, level: 3 });
+      expect(bySkill.get(cached[1]!.id)).toMatchObject({ name: cached[1]!.name, level: null });
+    });
   });
 
   // ---------------------------------------------------------------------------
