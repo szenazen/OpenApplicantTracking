@@ -260,6 +260,46 @@ export interface ApplicationComment {
   } | null;
 }
 
+/** External candidate returned by the Sourcing provider — pre-import shape. */
+export interface ExternalCandidate {
+  externalId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  headline?: string;
+  location?: string;
+  currentCompany?: string;
+  currentTitle?: string;
+  yearsExperience?: number;
+  summary?: string;
+  profileUrl?: string;
+  skills?: string[];
+}
+
+export interface SourcingSearchResponse {
+  source: string;
+  results: ExternalCandidate[];
+}
+
+export interface CandidateImportResponse {
+  import: {
+    id: string;
+    source: string;
+    externalId: string;
+    status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    jobId: string | null;
+    createdAt: string;
+  };
+  candidate: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+  };
+  /** `true` when the import deduped to a prior identical import. */
+  deduped: boolean;
+}
+
 /**
  * Job-level collaborator — matches `JobMember` in regional.prisma.
  * The `role` is the enum value (`OWNER`, `RECRUITER`, ...); the UI translates

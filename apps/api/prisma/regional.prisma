@@ -48,6 +48,7 @@ model Account {
   files           File[]
   jobNotes        JobNote[]
   jobMembers      JobMember[]
+  candidateImports CandidateImport[]
   applicationComments  ApplicationComment[]
   applicationReactions ApplicationReaction[]
 
@@ -173,6 +174,7 @@ model Candidate {
   applications    Application[]
   files           File[]
   skills          CandidateSkill[]
+  imports         CandidateImport[]
 
   @@unique([accountId, email])
   @@index([accountId])
@@ -428,6 +430,49 @@ model JobMember {
   @@index([accountId])
   @@index([jobId])
   @@map("job_members")
+}
+
+// -----------------------------------------------------------------------------
+// Candidate imports — audit trail for the External Sourcing Service.
+//
+// Every time a candidate is pulled from an external source (LinkedIn-like
+// stub, a pasted URL that gets parsed, a CSV row, etc.) we record the
+// attempt here. This gives us:
+//   - an audit of "where did this profile come from?" per candidate,
+//   - natural idempotency via unique([accountId, source, externalId]) so
+//     importing the same profile twice is a no-op,
+//   - observability on the sourcing funnel (search -> import -> hired).
+// The `rawPayload` keeps the source's original JSON so we can re-parse as
+// the parser improves without another round-trip.
+// -----------------------------------------------------------------------------
+
+enum CandidateImportStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model CandidateImport {
+  id              String                 @id @default(cuid())
+  accountId       String
+  candidateId     String?                                  // null until parse succeeds
+  source          String                                   // e.g. "linkedin-stub", "paste-url"
+  externalId      String                                   // id within the source system
+  status          CandidateImportStatus  @default(PENDING)
+  error           String?
+  rawPayload      Json                   @default("{}")
+  createdBy       String                                   // global user id of actor
+  jobId           String?                                  // optional — created an application on this job
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  account         Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  candidate       Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, source, externalId])
+  @@index([accountId, createdAt])
+  @@index([jobId])
+  @@map("candidate_imports")
 }
 
 // -----------------------------------------------------------------------------
