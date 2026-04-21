@@ -300,6 +300,48 @@ export interface CandidateImportResponse {
   deduped: boolean;
 }
 
+/**
+ * Job-scoped analytics. Mirrors `JobReport` returned by
+ * `GET /jobs/:id/reports`.
+ */
+export interface FunnelEntry {
+  statusId: string;
+  name: string;
+  category: string;
+  position: number;
+  count: number;
+}
+
+export interface TimeInStageEntry {
+  statusId: string;
+  name: string;
+  position: number;
+  avgSeconds: number | null;
+  sampleSize: number;
+}
+
+export interface HiresOverTimeEntry {
+  date: string;
+  count: number;
+}
+
+export interface JobReport {
+  jobId: string;
+  generatedAt: string;
+  funnel: FunnelEntry[];
+  timeInStage: TimeInStageEntry[];
+  hiresOverTime: {
+    windowDays: number;
+    series: HiresOverTimeEntry[];
+  };
+  totals: {
+    applications: number;
+    hired: number;
+    dropped: number;
+    inProgress: number;
+  };
+}
+
 /** A resolved skill (id + display name) from the regional skill cache. */
 export interface SkillRef {
   id: string;

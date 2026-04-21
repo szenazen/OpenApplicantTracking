@@ -20,6 +20,7 @@ import { ActivitiesModule } from './modules/activities/activities.module';
 import { JobMembersModule } from './modules/job-members/job-members.module';
 import { SourcingModule } from './modules/sourcing/sourcing.module';
 import { RecommendationsModule } from './modules/recommendations/recommendations.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     JobMembersModule,
     SourcingModule,
     RecommendationsModule,
+    ReportsModule,
     RealtimeModule,
   ],
 })
