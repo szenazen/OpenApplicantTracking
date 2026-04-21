@@ -87,16 +87,20 @@ export interface JobSummary {
   title: string;
   department?: string | null;
   location?: string | null;
+  employmentType?: string | null;
   status: string;
   pipelineId: string;
   openedAt?: string | null;
 }
 
+/** Matches the backend `StatusCategory` enum (see regional.prisma). */
+export type StatusCategory = 'NEW' | 'IN_PROGRESS' | 'HIRED' | 'DROPPED' | string;
+
 export interface PipelineStatus {
   id: string;
   name: string;
   position: number;
-  category: string;
+  category: StatusCategory;
   color?: string | null;
 }
 
@@ -113,10 +117,16 @@ export interface ApplicationCard {
   jobId: string;
   currentStatusId: string;
   position: number;
+  appliedAt?: string | null;
+  lastTransitionAt?: string | null;
   candidate: {
     id: string;
     firstName: string;
     lastName: string;
     headline?: string | null;
+    currentTitle?: string | null;
+    currentCompany?: string | null;
+    yearsExperience?: number | null;
+    location?: string | null;
   };
 }

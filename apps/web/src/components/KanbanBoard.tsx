@@ -3,13 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { io, Socket } from 'socket.io-client';
-import { api, ApplicationCard, Pipeline } from '@/lib/api';
+import { Briefcase, Clock, Eye, MoreVertical } from 'lucide-react';
+import { api, ApplicationCard, Pipeline, PipelineStatus } from '@/lib/api';
 import { useAuth } from '@/lib/store';
+import { avatarColor, formatRelativeDuration, formatYearsExperience, getInitials } from '@/lib/format';
 
 interface Props {
   jobId: string;
   pipeline: Pipeline;
   initialCards: ApplicationCard[];
+  /** Optional observer fired whenever the local card list changes (used by the header). */
+  onCardsChange?: (cards: ApplicationCard[]) => void;
 }
 
 /**
@@ -19,10 +23,15 @@ interface Props {
  *   - socket.io subscription to application.moved so other tabs/browsers
  *     watching the same job see moves in real time.
  */
-export function KanbanBoard({ jobId, pipeline, initialCards }: Props) {
+export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange }: Props) {
   const { token, activeAccountId } = useAuth();
   const [cards, setCards] = useState<ApplicationCard[]>(initialCards);
   const [error, setError] = useState<string | null>(null);
+  // Notify the parent (e.g. JobHeader) about card-list changes after render
+  // so pipeline summary tiles stay in sync with drags + socket events.
+  useEffect(() => {
+    onCardsChange?.(cards);
+  }, [cards, onCardsChange]);
 
   // Group cards by status id (position-sorted) for the columns.
   const columns = useMemo(() => {
@@ -120,30 +129,25 @@ export function KanbanBoard({ jobId, pipeline, initialCards }: Props) {
                   data-testid={`column-${s.id}`}
                   data-column-name={s.name}
                 >
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-700">{s.name}</h3>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                      {columns.get(s.id)?.length ?? 0}
-                    </span>
-                  </div>
+                  <ColumnHeader status={s} count={columns.get(s.id)?.length ?? 0} />
                   <ul className="flex flex-1 flex-col gap-2">
                     {columns.get(s.id)?.map((card, idx) => (
                       <Draggable draggableId={card.id} index={idx} key={card.id}>
-                        {(drag) => (
+                        {(drag, dragSnapshot) => (
                           <li
                             ref={drag.innerRef}
                             {...drag.draggableProps}
                             {...drag.dragHandleProps}
-                            className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-brand-500"
+                            className={
+                              'group rounded-lg border bg-white p-3 shadow-sm transition-shadow ' +
+                              (dragSnapshot.isDragging
+                                ? 'border-brand-500 shadow-md'
+                                : 'border-slate-200 hover:border-brand-500 hover:shadow')
+                            }
                             data-testid="kanban-card"
                             data-card-id={card.id}
                           >
-                            <div className="text-sm font-medium">
-                              {card.candidate.firstName} {card.candidate.lastName}
-                            </div>
-                            {card.candidate.headline && (
-                              <div className="mt-1 text-xs text-slate-500">{card.candidate.headline}</div>
-                            )}
+                            <CandidateCardBody card={card} />
                           </li>
                         )}
                       </Draggable>
@@ -158,6 +162,135 @@ export function KanbanBoard({ jobId, pipeline, initialCards }: Props) {
       </DragDropContext>
     </div>
   );
+}
+
+/** Column header with a status-color dot, name, count pill, and a kebab menu placeholder. */
+function ColumnHeader({ status, count }: { status: PipelineStatus; count: number }) {
+  const dotColor = status.color || categoryColor(status.category);
+  return (
+    <div className="mb-2 flex items-center justify-between">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden
+          className="inline-block h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: dotColor }}
+        />
+        <h3 className="truncate text-sm font-semibold text-slate-700">{status.name}</h3>
+        <span
+          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
+          data-testid={`col-count-${status.id}`}
+        >
+          {count}
+        </span>
+      </div>
+      <span className="text-slate-300" aria-hidden>
+        <MoreVertical size={14} />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Candidate card body — matches the reference Kanban UI:
+ *   avatar + name (bold brand) / role @ company / meta row (yoe, time in status) / actions.
+ *
+ * All text is gracefully optional: if a candidate has no current title we fall
+ * back to their headline; if no company, we just show the title.
+ */
+function CandidateCardBody({ card }: { card: ApplicationCard }) {
+  const { candidate } = card;
+  const initials = getInitials(candidate.firstName, candidate.lastName);
+  const palette = avatarColor(candidate.id || `${candidate.firstName}${candidate.lastName}`);
+  const roleLine = buildRoleLine(candidate);
+  const yoe = formatYearsExperience(candidate.yearsExperience);
+  const timeInStage = formatRelativeDuration(card.lastTransitionAt);
+
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${palette.bg} ${palette.fg}`}
+        aria-hidden
+      >
+        {initials}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div
+              className="truncate text-sm font-semibold text-brand-700"
+              data-testid="kanban-card-name"
+              title={`${candidate.firstName} ${candidate.lastName}`}
+            >
+              {candidate.firstName} {candidate.lastName}
+            </div>
+            {roleLine && (
+              <div className="mt-0.5 truncate text-xs text-slate-500" data-testid="kanban-card-role">
+                {roleLine}
+              </div>
+            )}
+          </div>
+          {/*
+           * Render action affordances as non-interactive icons (spans) rather
+           * than <button>s. Nested buttons inside a @hello-pangea/dnd draggable
+           * (which itself gets role="button") break mouse event propagation to
+           * the drag handle and cause drops to silently cancel. When we wire
+           * up real click handlers, swap these for keyboard-accessible menu
+           * triggers outside the drag handle.
+           */}
+          <div
+            className="flex shrink-0 items-center gap-1 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          >
+            <Eye size={14} />
+            <MoreVertical size={14} />
+          </div>
+        </div>
+        {(yoe || timeInStage) && (
+          <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
+            {yoe && (
+              <span className="inline-flex items-center gap-1" data-testid="kanban-card-yoe" title="Years of experience">
+                <Briefcase size={11} /> {yoe}
+              </span>
+            )}
+            {timeInStage && (
+              <span
+                className="inline-flex items-center gap-1"
+                data-testid="kanban-card-time-in-stage"
+                title="Time in current stage"
+              >
+                <Clock size={11} /> {timeInStage}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Best-effort "Role @ Company" / "Role" / "Headline" line. */
+function buildRoleLine(c: ApplicationCard['candidate']): string {
+  const title = c.currentTitle?.trim() || c.headline?.trim() || '';
+  const company = c.currentCompany?.trim();
+  if (title && company) return `${title} @ ${company}`;
+  if (title) return title;
+  if (company) return `@ ${company}`;
+  return '';
+}
+
+/** Fallback dot color when a status has no explicit color — mapped to category. */
+function categoryColor(category: string): string {
+  switch (category) {
+    case 'NEW':
+      return '#60a5fa';
+    case 'HIRED':
+      return '#22c55e';
+    case 'DROPPED':
+      return '#ef4444';
+    case 'IN_PROGRESS':
+    default:
+      return '#94a3b8';
+  }
 }
 
 /**

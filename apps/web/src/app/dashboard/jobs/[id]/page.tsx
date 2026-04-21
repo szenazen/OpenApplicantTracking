@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ApplicationCard, JobSummary, Pipeline } from '@/lib/api';
 import { KanbanBoard } from '@/components/KanbanBoard';
+import { JobHeader } from '@/components/JobHeader';
 
 type JobWithApplications = JobSummary & {
   pipeline: Pipeline;
@@ -14,7 +13,12 @@ type JobWithApplications = JobSummary & {
 export default function JobBoardPage({ params }: { params: { id: string } }) {
   const [job, setJob] = useState<JobSummary | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
-  const [cards, setCards] = useState<ApplicationCard[] | null>(null);
+  const [initialCards, setInitialCards] = useState<ApplicationCard[] | null>(null);
+  // Shadow copy of the Kanban's card list, so the JobHeader summary tiles stay
+  // live as cards are dragged / socket events arrive. The Kanban owns the
+  // canonical state (avoids re-render churn breaking drag), and reports changes
+  // via an observer callback below.
+  const [liveCards, setLiveCards] = useState<ApplicationCard[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,7 +28,9 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
         if (cancelled) return;
         setJob(j);
         setPipeline(j.pipeline);
-        setCards(j.applications ?? []);
+        const apps = j.applications ?? [];
+        setInitialCards(apps);
+        setLiveCards(apps);
       })
       .catch((e) => setErr(e.message ?? 'Failed to load job'));
     return () => {
@@ -32,23 +38,22 @@ export default function JobBoardPage({ params }: { params: { id: string } }) {
     };
   }, [params.id]);
 
+  const handleCardsChange = useCallback((cards: ApplicationCard[]) => {
+    setLiveCards(cards);
+  }, []);
+
   if (err) return <p className="p-6 text-sm text-red-700">{err}</p>;
-  if (!job || !pipeline || !cards) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
+  if (!job || !pipeline || !initialCards) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 bg-white px-6 py-3">
-        <Link
-          href="/dashboard"
-          className="mb-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
-        >
-          <ArrowLeft size={12} /> back to jobs
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight" data-testid="job-title">
-          {job.title}
-        </h1>
-      </div>
-      <KanbanBoard jobId={job.id} pipeline={pipeline} initialCards={cards} />
+      <JobHeader job={job} pipeline={pipeline} applications={liveCards} />
+      <KanbanBoard
+        jobId={job.id}
+        pipeline={pipeline}
+        initialCards={initialCards}
+        onCardsChange={handleCardsChange}
+      />
     </div>
   );
 }
