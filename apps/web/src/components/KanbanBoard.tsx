@@ -112,6 +112,12 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange, onOp
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
+    // Capture the version we saw before optimistically mutating local state,
+    // so the server can reject stale moves (409) instead of silently
+    // overwriting someone else's concurrent drag.
+    const moving = cards.find((c) => c.id === draggableId);
+    const expectedVersion = moving?.version;
+
     // Optimistic update
     setCards((prev) =>
       reconcileMove(prev, {
@@ -123,12 +129,28 @@ export function KanbanBoard({ jobId, pipeline, initialCards, onCardsChange, onOp
     );
 
     try {
+      // A per-drag uuid makes the request safe to retry on network errors:
+      // the server dedupes via the `Idempotency-Key` header.
+      const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${draggableId}-${Date.now()}`;
       await api(`/applications/${draggableId}/move`, {
         method: 'PATCH',
-        body: { toStatusId: destination.droppableId, toPosition: destination.index },
+        body: {
+          toStatusId: destination.droppableId,
+          toPosition: destination.index,
+          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+        },
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
     } catch (err: any) {
-      setError(err.message ?? 'Move failed — refresh to reconcile');
+      // 409 means someone else moved the card — reload the board so the user
+      // sees the up-to-date state instead of a stale optimistic one.
+      if (err?.status === 409) {
+        setError('This card was just updated by someone else — reloading to reconcile.');
+      } else {
+        setError(err.message ?? 'Move failed — refresh to reconcile');
+      }
     }
   }
 

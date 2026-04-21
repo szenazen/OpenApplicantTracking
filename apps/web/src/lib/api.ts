@@ -35,6 +35,8 @@ export interface ApiOptions {
   withAccount?: boolean;
   /** Override the account id (e.g. when switching). */
   accountId?: string;
+  /** Additional request headers (e.g. Idempotency-Key for safe retries). */
+  headers?: Record<string, string>;
 }
 
 export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
@@ -43,6 +45,7 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   if (token) headers.Authorization = `Bearer ${token}`;
   const accountId = opts.accountId ?? (opts.withAccount === false ? null : getActiveAccountId());
   if (accountId) headers['x-account-id'] = accountId;
+  if (opts.headers) Object.assign(headers, opts.headers);
 
   const res = await fetch(`${API_PREFIX}${path}`, {
     method: opts.method ?? (opts.body ? 'POST' : 'GET'),
@@ -117,6 +120,8 @@ export interface ApplicationCard {
   jobId: string;
   currentStatusId: string;
   position: number;
+  /** Optimistic-concurrency token — the board echoes it back on PATCH /move. */
+  version?: number;
   appliedAt?: string | null;
   lastTransitionAt?: string | null;
   candidate: {
@@ -155,6 +160,7 @@ export interface ApplicationDetail {
   jobId: string;
   currentStatusId: string;
   position: number;
+  version: number;
   appliedAt: string;
   lastTransitionAt: string;
   notes?: string | null;

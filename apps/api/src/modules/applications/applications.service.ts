@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -80,6 +85,7 @@ export class ApplicationsService {
       jobId: application.jobId,
       currentStatusId: application.currentStatusId,
       position: application.position,
+      version: application.version,
       appliedAt: application.appliedAt,
       lastTransitionAt: application.lastTransitionAt,
       notes: application.notes,
@@ -144,22 +150,69 @@ export class ApplicationsService {
 
   /**
    * Move an application across columns (or reorder within one).
-   * Atomically updates position and emits a realtime event.
+   *
+   * Reliability guarantees (per design/ATS-design.drawio.xml):
+   *   - **Optimistic concurrency**: if the caller sends `expectedVersion` and
+   *     it no longer matches the DB row, we reject with 409 so the client
+   *     can reconcile before retrying. This protects against two recruiters
+   *     dragging the same card simultaneously from stale state.
+   *   - **Idempotency**: if `idempotencyKey` is supplied (typically the
+   *     browser's per-drag uuid) and a transition with the same key already
+   *     exists for this application, we return the current state as a
+   *     no-op — safe to retry on network errors without creating duplicates.
    */
   async move(
     accountId: string,
     applicationId: string,
-    input: { toStatusId: string; toPosition: number; reason?: string },
+    input: {
+      toStatusId: string;
+      toPosition: number;
+      reason?: string;
+      expectedVersion?: number;
+    },
     actorUserId: string,
+    idempotencyKey?: string,
   ) {
     const { client } = await this.router.forAccount(accountId);
 
     return client.$transaction(async (tx) => {
+      // Idempotent replay: if this exact retry already landed, surface the
+      // post-state without doing anything else.
+      if (idempotencyKey) {
+        const prior = await tx.applicationTransition.findUnique({
+          where: {
+            applicationId_idempotencyKey: { applicationId, idempotencyKey },
+          },
+        });
+        if (prior) {
+          const settled = await tx.application.findFirst({
+            where: { id: applicationId, accountId },
+            include: { candidate: true, currentStatus: true },
+          });
+          if (!settled) throw new NotFoundException('Application not found');
+          return settled;
+        }
+      }
+
       const current = await tx.application.findFirst({
         where: { id: applicationId, accountId },
         include: { currentStatus: true, job: { include: { pipeline: true } } },
       });
       if (!current) throw new NotFoundException('Application not found');
+
+      // Optimistic concurrency check. Only enforce if the caller actually
+      // sent a version — unversioned clients are still accepted (the first
+      // writer wins, which is the current default).
+      if (
+        input.expectedVersion !== undefined &&
+        input.expectedVersion !== current.version
+      ) {
+        throw new ConflictException({
+          message: 'Application version mismatch — reload to reconcile.',
+          expectedVersion: input.expectedVersion,
+          actualVersion: current.version,
+        });
+      }
 
       const toStatus = await tx.pipelineStatus.findFirst({
         where: { id: input.toStatusId, pipelineId: current.job.pipelineId },
@@ -200,7 +253,12 @@ export class ApplicationsService {
 
       const moved = await tx.application.update({
         where: { id: applicationId },
-        data: { currentStatusId: toStatusId, position: toPos, lastTransitionAt: new Date() },
+        data: {
+          currentStatusId: toStatusId,
+          position: toPos,
+          lastTransitionAt: new Date(),
+          version: { increment: 1 },
+        },
         include: { candidate: true, currentStatus: true },
       });
 
@@ -211,6 +269,7 @@ export class ApplicationsService {
           toStatusId,
           byUserId: actorUserId,
           reason: input.reason,
+          idempotencyKey: idempotencyKey ?? null,
         },
       });
       await tx.auditEvent.create({
@@ -219,7 +278,7 @@ export class ApplicationsService {
           actorUserId,
           action: 'application.moved',
           resource: `application:${applicationId}`,
-          metadata: { fromStatusId, toStatusId, toPosition: toPos },
+          metadata: { fromStatusId, toStatusId, toPosition: toPos, version: moved.version },
         },
       });
 

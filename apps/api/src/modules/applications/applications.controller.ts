@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
@@ -16,6 +16,12 @@ class MoveApplicationDto {
   @IsString() @MinLength(1) toStatusId!: string;
   @IsInt() @Min(0) toPosition!: number;
   @IsOptional() @IsString() reason?: string;
+  /**
+   * Optional optimistic-concurrency token. When present we require it to
+   * match the current `application.version`; otherwise the move is rejected
+   * with 409 Conflict so the client can reconcile.
+   */
+  @IsOptional() @IsInt() @Min(0) expectedVersion?: number;
 }
 
 @ApiTags('applications')
@@ -37,13 +43,18 @@ export class ApplicationsController {
     return this.svc.get(accountId, id);
   }
 
+  /**
+   * Move a card. Accepts standard HTTP `Idempotency-Key` header — safe for
+   * clients to retry on network errors without creating duplicate history.
+   */
   @Patch(':id/move')
   move(
     @AccountId() accountId: string,
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: MoveApplicationDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.svc.move(accountId, id, dto, user.userId);
+    return this.svc.move(accountId, id, dto, user.userId, idempotencyKey || undefined);
   }
 }

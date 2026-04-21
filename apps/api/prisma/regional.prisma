@@ -184,6 +184,7 @@ model Application {
   jobId              String
   currentStatusId    String
   position           Int      @default(0)       // order within status column
+  version            Int      @default(0)       // optimistic-concurrency token (see design APPLICATIONS.version)
   appliedAt          DateTime @default(now())
   lastTransitionAt   DateTime @default(now())
   notes              String?
@@ -209,10 +210,15 @@ model ApplicationTransition {
   toStatusId      String
   byUserId        String                        // global user id
   reason          String?
+  // Client-supplied retry key. When the same key is retried for the same
+  // application the move is a no-op that returns the already-applied state.
+  // Matches design APPLICATION_STATUS_HISTORY.idempotency_key.
+  idempotencyKey  String?
   createdAt       DateTime @default(now())
 
   application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
+  @@unique([applicationId, idempotencyKey])
   @@index([applicationId, createdAt])
   @@map("application_transitions")
 }

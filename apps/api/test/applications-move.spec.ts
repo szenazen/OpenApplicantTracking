@@ -311,4 +311,85 @@ describe('Applications.move (integration)', () => {
         .expect(403);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Reliability: optimistic concurrency + idempotent moves.
+  //
+  // Design contract (see design/ATS-design.drawio.xml):
+  //   - `APPLICATIONS.version` protects against lost updates when two recruiters
+  //     drag the same card from stale state.
+  //   - `APPLICATION_STATUS_HISTORY.idempotency_key` lets clients safely retry
+  //     a move on network errors without creating duplicate transitions.
+  // ---------------------------------------------------------------------------
+  describe('PATCH /applications/:id/move — reliability', () => {
+    // We use apps[2] here — it has not been moved by the earlier tests so its
+    // version is still 0 and it sits in column A.
+    it('accepts a move when expectedVersion matches and bumps the row version', async () => {
+      const before = await regional.application.findUniqueOrThrow({
+        where: { id: apps[2]!.id },
+      });
+      const res = await request(app.getHttpServer())
+        .patch(`/applications/${apps[2]!.id}/move`)
+        .set(headers())
+        .send({
+          toStatusId: statusIds.c,
+          toPosition: 0,
+          expectedVersion: before.version,
+        })
+        .expect(200);
+      expect(res.body.version).toBe(before.version + 1);
+    });
+
+    it('rejects a move with 409 when expectedVersion is stale', async () => {
+      const current = await regional.application.findUniqueOrThrow({
+        where: { id: apps[2]!.id },
+      });
+      // Intentionally send a version one older than the DB.
+      await request(app.getHttpServer())
+        .patch(`/applications/${apps[2]!.id}/move`)
+        .set(headers())
+        .send({
+          toStatusId: statusIds.a,
+          toPosition: 0,
+          expectedVersion: current.version - 1,
+        })
+        .expect(409);
+    });
+
+    it('replays with the same Idempotency-Key as a no-op and does not duplicate history', async () => {
+      const key = `retry-${uniqueSuffix()}`;
+      const before = await regional.applicationTransition.count({
+        where: { applicationId: apps[2]!.id },
+      });
+
+      // First call: performs the move.
+      const first = await request(app.getHttpServer())
+        .patch(`/applications/${apps[2]!.id}/move`)
+        .set(headers())
+        .set('Idempotency-Key', key)
+        .send({ toStatusId: statusIds.d, toPosition: 0 })
+        .expect(200);
+
+      const afterFirst = await regional.applicationTransition.count({
+        where: { applicationId: apps[2]!.id },
+      });
+      expect(afterFirst).toBe(before + 1);
+
+      // Second call with the same key: must be idempotent — same end state,
+      // no new transition row, no version bump.
+      const second = await request(app.getHttpServer())
+        .patch(`/applications/${apps[2]!.id}/move`)
+        .set(headers())
+        .set('Idempotency-Key', key)
+        .send({ toStatusId: statusIds.d, toPosition: 0 })
+        .expect(200);
+
+      const afterSecond = await regional.applicationTransition.count({
+        where: { applicationId: apps[2]!.id },
+      });
+      expect(afterSecond).toBe(afterFirst);
+      expect(second.body.currentStatusId).toBe(first.body.currentStatusId);
+      expect(second.body.version).toBe(first.body.version);
+    });
+  });
 });
