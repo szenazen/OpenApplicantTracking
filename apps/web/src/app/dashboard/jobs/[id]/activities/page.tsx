@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowRight,
   Briefcase,
@@ -101,7 +102,7 @@ export default function JobActivitiesPage() {
           <>
             <ol className="space-y-3" data-testid="activity-list">
               {entries.map((e) => (
-                <ActivityRow key={e.id} entry={e} statusNames={statusNames} />
+                <ActivityRow key={e.id} entry={e} statusNames={statusNames} jobId={job.id} />
               ))}
             </ol>
             {nextBefore && (
@@ -127,18 +128,17 @@ export default function JobActivitiesPage() {
 function ActivityRow({
   entry,
   statusNames,
+  jobId,
 }: {
   entry: ActivityEntry;
   statusNames: Map<string, string>;
+  jobId: string;
 }) {
   const { icon: Icon, tone } = kindVisual(entry.action);
   const actorName = entry.actor?.displayName ?? entry.actor?.email ?? 'Someone';
-  return (
-    <li
-      className="flex gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-      data-testid="activity-item"
-      data-activity-action={entry.action}
-    >
+  const href = deepLink(entry, jobId);
+  const body = (
+    <div className="flex gap-3">
       <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}>
         <Icon size={14} />
       </span>
@@ -151,8 +151,51 @@ function ActivityRow({
           {formatRelative(entry.createdAt)}
         </p>
       </div>
+    </div>
+  );
+  return (
+    <li data-testid="activity-item" data-activity-action={entry.action}>
+      {href ? (
+        <Link
+          href={href}
+          data-testid="activity-link"
+          className="block rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          {body}
+        </Link>
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">{body}</div>
+      )}
     </li>
   );
+}
+
+/**
+ * Resolve an audit-event row to the UI page where it "lives".
+ * - Application events open the Kanban with the candidate drawer pre-opened.
+ * - Comment / reaction events behave the same since they're scoped to an application.
+ * - Note events open the Notes tab.
+ * - Job-member events open the Team tab.
+ * - Job updates open the Summary tab.
+ * Falls back to `null` for unknown action kinds, which keeps the row as a
+ * static card rather than silently linking to the wrong place.
+ */
+function deepLink(entry: ActivityEntry, jobId: string): string | null {
+  const m = entry.metadata ?? {};
+  const applicationId = typeof m.applicationId === 'string' ? (m.applicationId as string) : null;
+  const a = entry.action;
+  if (a.startsWith('application.') || a.startsWith('comment.') || a.startsWith('reaction.')) {
+    // The Kanban page lives at the job root. A query hint is included so
+    // Phase 6's drawer auto-open can pick the application up without a
+    // separate trip to the Activities tab.
+    return applicationId
+      ? `/dashboard/jobs/${jobId}?application=${applicationId}`
+      : `/dashboard/jobs/${jobId}`;
+  }
+  if (a.startsWith('note.')) return `/dashboard/jobs/${jobId}/notes`;
+  if (a.startsWith('job-member.')) return `/dashboard/jobs/${jobId}/team`;
+  if (a === 'job.updated') return `/dashboard/jobs/${jobId}/summary`;
+  return null;
 }
 
 /**

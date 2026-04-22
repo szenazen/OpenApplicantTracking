@@ -554,3 +554,29 @@ export interface NotificationPage {
   nextBefore: string | null;
   unreadCount: number;
 }
+
+export interface SearchJobHit {
+  type: 'job';
+  id: string;
+  title: string;
+  status: string;
+  department: string | null;
+  location: string | null;
+}
+
+export interface SearchCandidateHit {
+  type: 'candidate';
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  currentTitle: string | null;
+  currentCompany: string | null;
+}
+
+export interface SearchResult {
+  query: string;
+  jobs: SearchJobHit[];
+  candidates: SearchCandidateHit[];
+  total: number;
+}

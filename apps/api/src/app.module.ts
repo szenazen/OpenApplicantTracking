@@ -24,6 +24,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { HomeModule } from './modules/home/home.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     ReportsModule,
     HomeModule,
     NotificationsModule,
+    SearchModule,
     RealtimeModule,
   ],
 })

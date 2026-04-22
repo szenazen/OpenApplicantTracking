@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { api, MeResponse } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { Header } from '@/components/Header';
+import { CommandPalette } from '@/components/CommandPalette';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-full flex-col">
       <Header />
       <main className="flex-1 overflow-auto">{children}</main>
+      <CommandPalette />
     </div>
   );
 }
