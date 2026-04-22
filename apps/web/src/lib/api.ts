@@ -262,7 +262,30 @@ export interface CandidateListItem {
   source?: string | null;
   createdAt: string;
   applicationCounts: { total: number; active: number };
+  /**
+   * Candidate's most recent non-terminal application if any, otherwise
+   * their most recent application of any status, otherwise null. Used by
+   * the Candidates list to open the right application in the drawer.
+   */
+  mostRecentApplicationId: string | null;
   skills: Array<{ skillId: string; name: string; level: number | null }>;
+}
+
+/** Paginated response envelope for GET /candidates. */
+export interface CandidateListResponse {
+  items: CandidateListItem[];
+  nextCursor: string | null;
+}
+
+/** Client-side query params for GET /candidates. Keeps the Candidates page honest. */
+export interface CandidateListQuery {
+  q?: string;
+  skillIds?: string[];
+  hasActive?: boolean;
+  minYoe?: number;
+  maxYoe?: number;
+  limit?: number;
+  cursor?: string;
 }
 
 /** Full application payload returned by GET /applications/:id — drives the candidate drawer. */

@@ -48,10 +48,21 @@ test.describe('Candidates list', () => {
     const before = await page.getByTestId('candidate-row').count();
 
     await page.getByTestId('candidates-filter').fill(firstName);
-    // Give React a tick to re-render.
+    // The filter now runs server-side (with a 250ms typing debounce + URL
+    // round-trip), so we can't rely on an instant re-render. Wait until the
+    // URL reflects the query AND every row name actually matches the
+    // filter before asserting on the rendered names.
+    await expect(page).toHaveURL(new RegExp(`q=${encodeURIComponent(firstName)}`));
     await expect
-      .poll(async () => page.getByTestId('candidate-row').count(), { timeout: 2000 })
-      .toBeLessThanOrEqual(before);
+      .poll(
+        async () => {
+          const names = await page.getByTestId('candidate-name').allInnerTexts();
+          if (names.length === 0) return false;
+          return names.every((n) => n.toLowerCase().includes(firstName.toLowerCase()));
+        },
+        { timeout: 3000 },
+      )
+      .toBe(true);
 
     const afterNames = await page.getByTestId('candidate-name').allInnerTexts();
     expect(afterNames.length).toBeGreaterThan(0);

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -72,9 +72,69 @@ class UpdateCandidateDto {
 export class CandidatesController {
   constructor(private readonly svc: CandidatesService) {}
 
+  /**
+   * Paginated candidate list with keyset cursor + optional filters.
+   *
+   * Query params (all optional):
+   *   - q        : substring match across name/email/title/company/headline/location
+   *   - skillIds : CSV of skill ids; candidate must have ALL of them (AND)
+   *   - hasActive: "true" | "false" — has / has not any non-terminal application
+   *   - minYoe, maxYoe : inclusive bounds on yearsExperience (non-null only)
+   *   - limit    : 1..100, default 50
+   *   - cursor   : opaque keyset cursor returned in the previous response
+   *
+   * Returns `{ items, nextCursor }`. `nextCursor === null` means end of list.
+   */
   @Get()
-  list(@AccountId() accountId: string, @Query('q') q?: string) {
-    return this.svc.list(accountId, { q });
+  list(
+    @AccountId() accountId: string,
+    @Query('q') q?: string,
+    @Query('skillIds') skillIdsCsv?: string,
+    @Query('hasActive') hasActive?: string,
+    @Query('minYoe') minYoeRaw?: string,
+    @Query('maxYoe') maxYoeRaw?: string,
+    @Query('limit') limitRaw?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const skillIds = skillIdsCsv
+      ? skillIdsCsv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
+
+    if (skillIds && skillIds.length > 20) {
+      throw new BadRequestException('skillIds cannot contain more than 20 ids');
+    }
+
+    const activeFlag =
+      hasActive === undefined || hasActive === ''
+        ? undefined
+        : hasActive === 'true'
+          ? true
+          : hasActive === 'false'
+            ? false
+            : (() => {
+                throw new BadRequestException('hasActive must be "true" or "false"');
+              })();
+
+    const minYoe = parseOptionalNonNegativeInt(minYoeRaw, 'minYoe');
+    const maxYoe = parseOptionalNonNegativeInt(maxYoeRaw, 'maxYoe');
+    if (minYoe !== undefined && maxYoe !== undefined && minYoe > maxYoe) {
+      throw new BadRequestException('minYoe cannot be greater than maxYoe');
+    }
+
+    const limit = parseOptionalNonNegativeInt(limitRaw, 'limit');
+
+    return this.svc.list(accountId, {
+      q,
+      skillIds,
+      hasActive: activeFlag,
+      minYoe,
+      maxYoe,
+      limit,
+      cursor,
+    });
   }
 
   @Get(':id')
@@ -96,4 +156,18 @@ export class CandidatesController {
   update(@AccountId() accountId: string, @Param('id') id: string, @Body() dto: UpdateCandidateDto) {
     return this.svc.update(accountId, id, dto);
   }
+}
+
+/**
+ * Parse an optional query param as a non-negative integer. Returns
+ * `undefined` when absent. Throws a 400 on malformed input so clients
+ * get actionable feedback instead of silent filtering changes.
+ */
+function parseOptionalNonNegativeInt(raw: string | undefined, name: string): number | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+    throw new BadRequestException(`${name} must be a non-negative integer`);
+  }
+  return n;
 }

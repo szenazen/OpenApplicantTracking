@@ -49,53 +49,196 @@ export class CandidatesService {
   constructor(private readonly router: RegionRouterService) {}
 
   /**
-   * List candidates for the Candidates page. We enrich each row with:
+   * Paginated + filtered candidate list for the Candidates page. We enrich
+   * each row with:
    *   - `applicationCounts.{total, active}` — active = the candidate has at
    *     least one application whose pipeline status is not HIRED/DROPPED.
    *   - `skills` — flattened (skillId, name, level) tuples for chip rendering.
+   *   - `mostRecentApplicationId` — for drawer deep-linking from the list.
    *
-   * `active` is how recruiters typically scan their pipeline ("who should I
-   * follow up with?"), so we surface it as a first-class column.
+   * Pagination is **keyset** on `(createdAt DESC, id DESC)` so the list
+   * stays stable when new candidates are being created concurrently
+   * (offset-based pagination would skip or duplicate rows in that case).
+   * `nextCursor` is returned whenever there is likely a next page; clients
+   * pass it back on the next request.
+   *
+   * Filters are intentionally conservative — each one is expected to
+   * narrow the set, and they AND together:
+   *   - q          : case-insensitive substring across name/email/title/
+   *                  company/headline/location (recruiters rarely know
+   *                  which field a match will come from).
+   *   - skillIds   : candidate must have ALL of these skills (AND) so
+   *                  the filter is predictable; ANY-of semantics would
+   *                  quickly expand the set and is less useful on a small
+   *                  account.
+   *   - hasActive  : true -> at least one non-terminal application; false
+   *                  -> zero applications at all (no "only terminals"
+   *                  bucket — recruiters don't ask for that).
+   *   - minYoe/maxYoe: inclusive bounds. Null yoe is EXCLUDED when either
+   *                  bound is set — "no data" is not "0 years".
    */
-  async list(accountId: string, query?: { q?: string }) {
+  async list(
+    accountId: string,
+    query?: {
+      q?: string;
+      skillIds?: string[];
+      hasActive?: boolean;
+      minYoe?: number;
+      maxYoe?: number;
+      limit?: number;
+      cursor?: string;
+    },
+  ) {
     const { client } = await this.router.forAccount(accountId);
-    const rows = await client.candidate.findMany({
-      where: {
-        accountId,
-        ...(query?.q
-          ? {
-              OR: [
-                { firstName: { contains: query.q, mode: 'insensitive' } },
-                { lastName: { contains: query.q, mode: 'insensitive' } },
-                { email: { contains: query.q, mode: 'insensitive' } },
-              ],
-            }
+    const limit = Math.min(Math.max(query?.limit ?? 50, 1), 100);
+    const q = query?.q?.trim() ?? '';
+    const skillIds = (query?.skillIds ?? []).filter(Boolean);
+    const hasActive = query?.hasActive;
+
+    // Decode the keyset cursor — we encode `<createdAt_ms>_<id>` as
+    // base64url so it's opaque from the client's perspective.
+    let cursorCreatedAt: Date | undefined;
+    let cursorId: string | undefined;
+    if (query?.cursor) {
+      try {
+        const raw = Buffer.from(query.cursor, 'base64url').toString('utf8');
+        const [ts, id] = raw.split('_');
+        if (ts && id) {
+          const ms = Number(ts);
+          if (Number.isFinite(ms)) {
+            cursorCreatedAt = new Date(ms);
+            cursorId = id;
+          }
+        }
+      } catch {
+        // Ignore — bad cursor is treated as "start from the beginning".
+      }
+    }
+
+    const yoeFilter: Record<string, number> = {};
+    if (typeof query?.minYoe === 'number') yoeFilter.gte = query.minYoe;
+    if (typeof query?.maxYoe === 'number') yoeFilter.lte = query.maxYoe;
+
+    const where: Record<string, unknown> = {
+      accountId,
+      ...(q
+        ? {
+            OR: [
+              { firstName: { contains: q, mode: 'insensitive' } },
+              { lastName: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+              { currentTitle: { contains: q, mode: 'insensitive' } },
+              { currentCompany: { contains: q, mode: 'insensitive' } },
+              { headline: { contains: q, mode: 'insensitive' } },
+              { location: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      // AND semantics on skills: one AND clause per required skill.
+      ...(skillIds.length
+        ? { AND: skillIds.map((sid) => ({ skills: { some: { skillId: sid } } })) }
+        : {}),
+      ...(Object.keys(yoeFilter).length ? { yearsExperience: yoeFilter } : {}),
+      ...(hasActive === true
+        ? {
+            applications: {
+              some: {
+                currentStatus: { category: { notIn: ['HIRED', 'DROPPED'] } },
+              },
+            },
+          }
+        : hasActive === false
+          ? { applications: { none: {} } }
           : {}),
-      },
+      // Keyset: strictly after the cursor in (createdAt DESC, id DESC).
+      ...(cursorCreatedAt && cursorId
+        ? {
+            OR: [
+              { createdAt: { lt: cursorCreatedAt } },
+              { createdAt: cursorCreatedAt, id: { lt: cursorId } },
+            ],
+          }
+        : {}),
+    };
+
+    // If both `q` and cursor are set we'd clobber the OR array; merge with
+    // AND instead. Prisma allows an explicit top-level AND array so the
+    // two ORs don't overwrite each other.
+    if (q && cursorCreatedAt && cursorId) {
+      const andClauses = Array.isArray(where.AND) ? (where.AND as unknown[]) : [];
+      andClauses.push({
+        OR: [
+          { firstName: { contains: q, mode: 'insensitive' } },
+          { lastName: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { currentTitle: { contains: q, mode: 'insensitive' } },
+          { currentCompany: { contains: q, mode: 'insensitive' } },
+          { headline: { contains: q, mode: 'insensitive' } },
+          { location: { contains: q, mode: 'insensitive' } },
+        ],
+      });
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: cursorCreatedAt } },
+          { createdAt: cursorCreatedAt, id: { lt: cursorId } },
+        ],
+      });
+      delete (where as Record<string, unknown>).OR;
+      where.AND = andClauses;
+    }
+
+    // Fetch limit+1 to detect whether more rows exist without a
+    // separate COUNT query.
+    const rows = await client.candidate.findMany({
+      where,
       include: {
         applications: {
-          select: { id: true, currentStatus: { select: { category: true } } },
+          select: {
+            id: true,
+            createdAt: true,
+            currentStatus: { select: { category: true } },
+          },
+          orderBy: { createdAt: 'desc' },
         },
         skills: {
           select: { skillId: true, level: true, skill: { select: { name: true } } },
           orderBy: { createdAt: 'asc' },
         },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
     });
 
-    return rows.map(({ applications, skills, ...scalar }) => {
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    const items = page.map(({ applications, skills, ...scalar }) => {
       const total = applications.length;
       const active = applications.filter(
         (a) => a.currentStatus.category !== 'HIRED' && a.currentStatus.category !== 'DROPPED',
       ).length;
+      // Prefer a non-terminal "live" application for the drawer deep
+      // link — that's the one the recruiter is most likely to want to
+      // open. Fall back to the most-recent terminal application if none.
+      const live = applications.find(
+        (a) => a.currentStatus.category !== 'HIRED' && a.currentStatus.category !== 'DROPPED',
+      );
+      const mostRecent = live ?? applications[0];
       return {
         ...scalar,
         applicationCounts: { total, active },
+        mostRecentApplicationId: mostRecent?.id ?? null,
         skills: skills.map((s) => ({ skillId: s.skillId, level: s.level, name: s.skill.name })),
       };
     });
+
+    const last = page.at(-1);
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(`${last.createdAt.getTime()}_${last.id}`, 'utf8').toString('base64url')
+        : null;
+
+    return { items, nextCursor };
   }
 
   async get(accountId: string, candidateId: string) {
