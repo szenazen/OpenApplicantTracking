@@ -30,6 +30,12 @@ export interface JobContextValue {
    * full page reload.
    */
   patchJob: (patch: Partial<JobSummary>) => void;
+  /**
+   * Re-fetch `GET /jobs/:id` and replace pipeline, applications, and team in
+   * context — e.g. after `POST /applications` from Recommendations (Kanban may
+   * not be mounted, so socket events alone are not enough).
+   */
+  refreshJob: () => Promise<void>;
 }
 
 const Ctx = createContext<JobContextValue | null>(null);

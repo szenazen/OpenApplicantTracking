@@ -41,7 +41,7 @@ type AddState =
  * a candidate ranks where they do (explainable > black-box).
  */
 export default function JobRecommendationsPage() {
-  const { job } = useJob();
+  const { job, refreshJob } = useJob();
   const [data, setData] = useState<RecommendationsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +107,15 @@ export default function JobRecommendationsPage() {
         method: 'POST',
         body: { candidateId: cand.candidate.id, jobId: job.id },
       });
+      await refreshJob();
+      try {
+        const res = await api<RecommendationsResponse>(
+          `/jobs/${job.id}/recommendations?${queryString}`,
+        );
+        setData(res);
+      } catch {
+        /* list may be stale until next tab visit */
+      }
       setRowState((s) => ({ ...s, [cand.candidate.id]: { status: 'added' } }));
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message ?? 'Failed to add';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApplicationCard, JobMember, JobSummary, Pipeline } from '@/lib/api';
 import { JobHeader } from '@/components/JobHeader';
 import { JobProvider } from './JobContext';
@@ -30,6 +30,22 @@ export default function JobLayout({
   const [live, setLive] = useState<ApplicationCard[]>([]);
   const [members, setMembers] = useState<JobMember[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const idRef = useRef(params.id);
+  idRef.current = params.id;
+
+  const refreshJob = useCallback(async () => {
+    const fetchId = idRef.current;
+    try {
+      const j = await api<JobWithApplications>(`/jobs/${fetchId}`);
+      if (idRef.current !== fetchId) return;
+      setData(j);
+      setLive(j.applications ?? []);
+      setMembers(j.members ?? []);
+      setErr(null);
+    } catch (e) {
+      console.warn('[JobLayout] refreshJob failed', e);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +88,7 @@ export default function JobLayout({
         members,
         setMembers,
         patchJob,
+        refreshJob,
       }}
     >
       <div className="flex h-full flex-col">

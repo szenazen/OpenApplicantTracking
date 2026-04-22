@@ -10,8 +10,8 @@
  *       • Hays EU           (eu-west-1)
  *       • Hays Singapore    (ap-southeast-1)
  *   - Each account gets: default pipeline (already from AccountsService), 2 jobs,
- *     5 candidates per job (10 applications per account) spread across that job's
- *     pipeline statuses.
+ *     5 candidates per job (10 applications per account) on the Kanban, plus four
+ *     "pool" candidates (skills only, no applications) for the Recommendations tab.
  *
  * Replicates `skills` into each regional `skill_cache`.
  *
@@ -326,6 +326,41 @@ async function main() {
               },
             });
           }
+        }
+      }
+
+      // Talent pool: strong profiles + skills, no applications — shows up under
+      // Recommendations ("Add to job") while the loops above keep the Kanban busy.
+      const poolNames = [
+        ['Frank', 'Owens'],
+        ['Grace', 'Park'],
+        ['Henry', 'Kovacs'],
+        ['Ivy', 'Chen'],
+      ] as const;
+      for (const [fn, ln] of poolNames) {
+        const candidateEmail = `${fn.toLowerCase()}.${ln.toLowerCase()}.pool@${acc.slug}.local`;
+        const poolCand = await regional.candidate.upsert({
+          where: { accountId_email: { accountId: dir.id, email: candidateEmail } },
+          update: {},
+          create: {
+            accountId: dir.id,
+            firstName: fn,
+            lastName: ln,
+            email: candidateEmail,
+            headline: 'Senior Software Engineer',
+            currentTitle: 'Software Engineer',
+            location: acc.region,
+            yearsExperience: 6,
+            source: 'seed-pool',
+          },
+        });
+        const poolSkills = skills.slice(0, 6).map((s, idx) => ({
+          candidateId: poolCand.id,
+          skillId: s.id,
+          level: (idx % 3) + 3,
+        }));
+        if (poolSkills.length) {
+          await regional.candidateSkill.createMany({ data: poolSkills, skipDuplicates: true });
         }
       }
 
