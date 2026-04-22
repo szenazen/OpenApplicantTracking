@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -18,6 +18,20 @@ class JobReportQuery {
 @Controller('jobs/:jobId/reports')
 export class ReportsController {
   constructor(private readonly svc: ReportsService) {}
+
+  @Get('export')
+  async exportCsv(
+    @AccountId() accountId: string,
+    @Param('jobId') jobId: string,
+    @Query() q: JobReportQuery,
+  ) {
+    const csv = await this.svc.csvForJob(accountId, jobId, { windowDays: q.days });
+    const buf = Buffer.from(csv, 'utf-8');
+    return new StreamableFile(buf, {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="job-${jobId}-report.csv"`,
+    });
+  }
 
   @Get()
   forJob(

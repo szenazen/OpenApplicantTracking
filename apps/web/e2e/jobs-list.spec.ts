@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
  *      one seeded row with a candidate count chip.
  *   2. The search box filters rows server-side by job title / client with
  *      URL persistence, so a reload reproduces the filtered view.
- *   3. Clicking a job title navigates to the detail shell.
+ *   3. Clicking anywhere on a job row navigates to the Kanban shell.
  *   4. "View all" link on the home page jumps to the Jobs table.
  */
 test.describe('Jobs list', () => {
@@ -39,6 +39,7 @@ test.describe('Jobs list', () => {
     // Reference columns visible in the table header.
     const thead = page.locator('thead');
     await expect(thead).toContainText('Name');
+    await expect(thead).toContainText('Owner');
     await expect(thead).toContainText('Client');
     await expect(thead).toContainText('Location');
     await expect(thead).toContainText('# of Candidates');
@@ -85,13 +86,14 @@ test.describe('Jobs list', () => {
     await expect(page.getByTestId('jobs-filter')).toHaveValue(token);
   });
 
-  test('clicking a job title navigates to the job detail shell', async ({ page }) => {
+  test('clicking a job row navigates to the job detail shell', async ({ page }) => {
     await page.goto('/dashboard/jobs');
     await expect(page.getByTestId('jobs-page')).toBeVisible();
-    const firstTitle = page.getByTestId('jobs-title').first();
-    await expect(firstTitle).toBeVisible();
-    await firstTitle.click();
+    const row = page.getByTestId('jobs-row').first();
+    await expect(row).toBeVisible();
+    await row.click();
     await page.waitForURL(/\/dashboard\/jobs\/[^/]+/);
+    await expect(page.getByTestId('kanban-board')).toBeVisible();
   });
 
   test('home "View all" link jumps to the Jobs table', async ({ page }) => {

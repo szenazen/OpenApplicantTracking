@@ -204,19 +204,39 @@ async function main() {
         // user might already be linked to), otherwise create it. In both
         // cases we still re-run the candidate + candidate_skills loop below
         // so newly introduced tables (e.g. candidate_skills) get populated.
-        const existing = await regional.job.findFirst({ where: { accountId: dir.id, title: jt.title } });
-        const job = existing ?? (await regional.job.create({
-          data: {
+        let job = await regional.job.findFirst({ where: { accountId: dir.id, title: jt.title } });
+        if (!job) {
+          job = await regional.job.create({
+            data: {
+              accountId: dir.id,
+              title: jt.title,
+              department: jt.dept,
+              location: acc.region,
+              status: 'PUBLISHED',
+              pipelineId: pipeline.id,
+              openedAt: new Date(),
+              requiredSkillIds: skills.slice(0, 4).map((s) => s.id),
+              ownerId: user.id,
+            },
+          });
+        } else if (!job.ownerId) {
+          job = await regional.job.update({
+            where: { id: job.id },
+            data: { ownerId: user.id },
+          });
+        }
+
+        await regional.jobMember.upsert({
+          where: { jobId_userId: { jobId: job.id, userId: user.id } },
+          update: { role: 'OWNER' },
+          create: {
             accountId: dir.id,
-            title: jt.title,
-            department: jt.dept,
-            location: acc.region,
-            status: 'PUBLISHED',
-            pipelineId: pipeline.id,
-            openedAt: new Date(),
-            requiredSkillIds: skills.slice(0, 4).map((s) => s.id),
+            jobId: job.id,
+            userId: user.id,
+            role: 'OWNER',
+            createdBy: user.id,
           },
-        }));
+        });
 
         // Five candidates + spread them across statuses
         const names = [

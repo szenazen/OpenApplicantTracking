@@ -130,6 +130,7 @@ describe('Applications.move (integration)', () => {
     // Delete in dependency order.
     await regional.applicationTransition.deleteMany({ where: { application: { jobId } } }).catch(() => {});
     await regional.application.deleteMany({ where: { jobId } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.candidate.deleteMany({ where: { accountId } });
     await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId } } });

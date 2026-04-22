@@ -117,6 +117,7 @@ describe('Search (integration)', () => {
   afterAll(async () => {
     for (const id of [accountId, otherAccountId]) {
       await regional.candidate.deleteMany({ where: { accountId: id } });
+      await regional.jobMember.deleteMany({ where: { accountId: id } });
       await regional.job.deleteMany({ where: { accountId: id } });
       await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId: id } } });
       await regional.pipeline.deleteMany({ where: { accountId: id } });

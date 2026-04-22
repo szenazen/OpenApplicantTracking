@@ -240,6 +240,7 @@ describe('Candidates list (integration)', () => {
       .deleteMany({ where: { application: { jobId: { in: [jobId, otherJobId] } } } })
       .catch(() => {});
     await regional.application.deleteMany({ where: { jobId: { in: [jobId, otherJobId] } } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.candidateSkill.deleteMany({ where: { candidate: { accountId } } });
     await regional.candidate.deleteMany({ where: { accountId } });

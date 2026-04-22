@@ -127,6 +127,9 @@ model Job {
   status          JobStatus      @default(DRAFT)
   pipelineId      String
   requiredSkillIds String[] @default([])        // referencing Skill.id from global
+  // Primary recruiter / accountable owner (global user id). Kept in sync
+  // with a JobMember row with role OWNER when set.
+  ownerId         String?
   openedAt        DateTime?
   closedAt        DateTime?
   createdAt       DateTime @default(now())
@@ -139,6 +142,7 @@ model Job {
   members         JobMember[]
 
   @@index([accountId, status])
+  @@index([accountId, ownerId])
   @@map("jobs")
 }
 

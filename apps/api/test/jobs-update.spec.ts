@@ -82,6 +82,7 @@ describe('Jobs update (integration)', () => {
 
   afterAll(async () => {
     await regional.auditEvent.deleteMany({ where: { accountId } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId } } });
     await regional.pipeline.deleteMany({ where: { accountId } });

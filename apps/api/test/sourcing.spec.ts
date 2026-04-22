@@ -84,6 +84,7 @@ describe('Sourcing (integration)', () => {
     await regional.candidateImport.deleteMany({ where: { accountId } });
     await regional.application.deleteMany({ where: { accountId } });
     await regional.candidate.deleteMany({ where: { accountId } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId } } });
     await regional.pipeline.deleteMany({ where: { accountId } });

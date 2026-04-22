@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Clock, TrendingUp } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import {
   api,
+  apiText,
   type FunnelEntry,
   type HiresOverTimeEntry,
   type JobReport,
+  type StageDropOffEntry,
   type TimeInStageEntry,
 } from '@/lib/api';
 import { useJob } from '../JobContext';
@@ -55,29 +57,48 @@ export default function JobReportsPage() {
   return (
     <div className="overflow-auto p-6" data-testid="job-reports-page">
       <div className="max-w-5xl space-y-6">
-        <header className="flex items-center justify-between">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
               <BarChart3 size={14} className="text-brand-600" /> Reports
             </h2>
             <p className="text-xs text-slate-500">
-              Hiring funnel, average dwell per stage, and hires over time for this job.
+              Funnel health, drop-off by stage, conversion rates, dwell time, and hires over time.
             </p>
           </div>
-          <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5 text-xs">
-            {WINDOW_OPTIONS.map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => setDays(w)}
-                className={`rounded px-2 py-1 font-medium transition-colors ${
-                  days === w ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                data-testid={`reports-window-${w}`}
-              >
-                {w}d
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const csv = await apiText(`/jobs/${job.id}/reports/export?days=${days}`);
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `job-${job.id}-report.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              data-testid="reports-export-csv"
+            >
+              Export CSV
+            </button>
+            <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5 text-xs">
+              {WINDOW_OPTIONS.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setDays(w)}
+                  className={`rounded px-2 py-1 font-medium transition-colors ${
+                    days === w ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  data-testid={`reports-window-${w}`}
+                >
+                  {w}d
+                </button>
+              ))}
+            </div>
           </div>
         </header>
 
@@ -93,7 +114,13 @@ export default function JobReportsPage() {
           </p>
         ) : !data ? null : (
           <>
-            <KpiRow totals={data.totals} />
+            <KpiRow totals={data.totals} rates={data.rates} />
+            <Card
+              title="Conversion & drop-off"
+              subtitle="Share of applicants hired / dropped / in pipeline, and exits from each stage"
+            >
+              <DropOffTable rows={data.stageDropOff} rates={data.rates} />
+            </Card>
             <Card title="Funnel" subtitle="Applications currently in each stage">
               <FunnelChart funnel={data.funnel} />
             </Card>
@@ -130,7 +157,7 @@ function Card({
   );
 }
 
-function KpiRow({ totals }: { totals: JobReport['totals'] }) {
+function KpiRow({ totals, rates }: { totals: JobReport['totals']; rates: JobReport['rates'] }) {
   const tiles: Array<{ label: string; value: number; tone: string; testId: string }> = [
     { label: 'Applications', value: totals.applications, tone: 'text-slate-800', testId: 'kpi-applications' },
     { label: 'In pipeline', value: totals.inProgress, tone: 'text-sky-700', testId: 'kpi-in-progress' },
@@ -138,17 +165,80 @@ function KpiRow({ totals }: { totals: JobReport['totals'] }) {
     { label: 'Dropped', value: totals.dropped, tone: 'text-rose-700', testId: 'kpi-dropped' },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {tiles.map((t) => (
-        <div
-          key={t.label}
-          className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-          data-testid={t.testId}
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{t.label}</p>
-          <p className={`mt-1 text-2xl font-semibold tabular-nums ${t.tone}`}>{t.value}</p>
-        </div>
-      ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {tiles.map((t) => (
+          <div
+            key={t.label}
+            className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
+            data-testid={t.testId}
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{t.label}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${t.tone}`}>{t.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-500" data-testid="reports-rates">
+        Conversion:{' '}
+        <span className="font-medium text-emerald-700">
+          {rates.hiredOfApplicantsPct != null ? `${rates.hiredOfApplicantsPct}% hired` : '—'}
+        </span>
+        {' · '}
+        <span className="font-medium text-rose-600">
+          {rates.droppedOfApplicantsPct != null ? `${rates.droppedOfApplicantsPct}% dropped` : '—'}
+        </span>
+        {' · '}
+        <span className="font-medium text-sky-700">
+          {rates.inPipelineOfApplicantsPct != null ? `${rates.inPipelineOfApplicantsPct}% in pipeline` : '—'}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function DropOffTable({
+  rows,
+  rates,
+}: {
+  rows: StageDropOffEntry[];
+  rates: JobReport['rates'];
+}) {
+  const withExits = rows.filter((r) => r.exitTotal > 0);
+  if (withExits.length === 0) {
+    return <p className="text-xs text-slate-400">No stage exits recorded yet — move some cards to see drop-off.</p>;
+  }
+  return (
+    <div data-testid="reports-dropoff">
+      <ul className="space-y-2">
+        {withExits.map((r) => (
+          <li
+            key={r.statusId}
+            className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs sm:grid-cols-[10rem_1fr_auto]"
+          >
+            <span className="truncate font-medium text-slate-700" title={r.name}>
+              {r.name}
+            </span>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              {r.dropOffRatePct != null && (
+                <div
+                  className="h-full rounded-full bg-rose-400"
+                  style={{ width: `${Math.min(100, r.dropOffRatePct)}%` }}
+                  title={`${r.dropOffRatePct}% dropped when leaving this stage`}
+                />
+              )}
+            </div>
+            <span className="text-right tabular-nums text-slate-600">
+              {r.droppedCount}/{r.exitTotal} dropped
+              {r.dropOffRatePct != null && (
+                <span className="ml-1 text-rose-600">({r.dropOffRatePct}%)</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[10px] text-slate-400">
+        Rates row: {rates.hiredOfApplicantsPct ?? '—'}% hired of applicants (snapshot).
+      </p>
     </div>
   );
 }

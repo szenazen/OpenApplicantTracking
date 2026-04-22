@@ -127,6 +127,7 @@ describe('Reports (integration)', () => {
     await regional.applicationTransition.deleteMany({ where: { application: { accountId } } });
     await regional.application.deleteMany({ where: { accountId } });
     await regional.candidate.deleteMany({ where: { accountId } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId } } });
     await regional.pipeline.deleteMany({ where: { accountId } });
@@ -184,6 +185,28 @@ describe('Reports (integration)', () => {
       .get(`/jobs/does-not-exist/reports`)
       .set(hdr())
       .expect(404);
+  });
+
+  it('returns conversion rates and stage drop-off', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/reports`)
+      .set(hdr())
+      .expect(200);
+    expect(res.body.rates).toBeDefined();
+    expect(res.body.rates.hiredOfApplicantsPct).toBeGreaterThan(0);
+    expect(Array.isArray(res.body.stageDropOff)).toBe(true);
+    const applied = res.body.stageDropOff.find((s: any) => s.name === 'Applied');
+    expect(applied.exitTotal).toBeGreaterThanOrEqual(2);
+  });
+
+  it('exports CSV', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/reports/export?days=7`)
+      .set(hdr())
+      .expect(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+    expect(res.text).toContain('totals,applications,3');
+    expect(res.text).toContain('dropOff');
   });
 });
 

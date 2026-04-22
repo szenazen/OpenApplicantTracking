@@ -90,6 +90,12 @@ export function KanbanBoard({
   // confirmation modal before committing the move (with a reason).
   const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null);
 
+  // Reset when the parent loads a different job or replaces the application
+  // list from the server (layout briefly clears while fetching, then hydrates).
+  useEffect(() => {
+    setCards(initialCards);
+  }, [jobId, initialCards]);
+
   // Merge external card overrides (e.g. comment / reaction counts from the
   // drawer) into our local list. We only patch when the incoming snapshot
   // actually differs to avoid render churn.

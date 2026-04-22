@@ -41,5 +41,18 @@ test.describe('Job reports tab', () => {
     // Switch the window — the chart should re-render without errors.
     await page.getByTestId('reports-window-7').click();
     await expect(page.getByTestId('hires-over-time-chart')).toBeVisible();
+
+    await expect(page.getByTestId('reports-rates')).toBeVisible();
+    await expect(page.getByTestId('reports-dropoff')).toBeVisible();
+  });
+
+  test('CSV export button downloads a file', async ({ page }) => {
+    await page.getByTestId('tab-reports').click();
+    await page.waitForURL(/\/reports$/);
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByTestId('reports-export-csv').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.csv$/i);
   });
 });

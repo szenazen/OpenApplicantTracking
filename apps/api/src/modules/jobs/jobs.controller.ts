@@ -41,6 +41,7 @@ class CreateJobDto {
   employmentType?: (typeof EMPLOYMENT_TYPES)[number];
   @IsOptional() @IsString() pipelineId?: string;
   @IsOptional() @IsArray() requiredSkillIds?: string[];
+  @IsOptional() @IsString() ownerId?: string;
 }
 
 /**
@@ -65,6 +66,7 @@ class UpdateJobDto {
   status?: (typeof JOB_STATUSES)[number];
   @IsOptional() @IsArray() requiredSkillIds?: string[];
   @IsOptional() @IsString() pipelineId?: string;
+  @ValidateIf((_, v) => v !== null) @IsOptional() @IsString() ownerId?: string | null;
 }
 
 @ApiTags('jobs')
@@ -129,8 +131,12 @@ export class JobsController {
   }
 
   @Post()
-  create(@AccountId() accountId: string, @Body() dto: CreateJobDto) {
-    return this.svc.create(accountId, dto);
+  create(
+    @AccountId() accountId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateJobDto,
+  ) {
+    return this.svc.create(accountId, dto, user.userId);
   }
 
   @Patch(':id')

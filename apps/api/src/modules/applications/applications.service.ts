@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { JobPermissionsService } from '../../common/job-permissions.service';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { ReactionsService } from '../reactions/reactions.service';
@@ -16,6 +17,7 @@ export class ApplicationsService {
     private readonly realtime: RealtimeGateway,
     private readonly global: GlobalPrismaService,
     private readonly reactions: ReactionsService,
+    private readonly jobPermissions: JobPermissionsService,
   ) {}
 
   /**
@@ -139,6 +141,8 @@ export class ApplicationsService {
     if (!job) throw new NotFoundException('Job not found');
     if (!job.pipeline.statuses.length) throw new BadRequestException('Pipeline has no statuses');
 
+    await this.jobPermissions.assertCanMoveApplications(accountId, job.id, actorUserId);
+
     const statusId =
       input.statusId ??
       job.pipeline.statuses.find((s) => s.category === 'NEW')?.id ??
@@ -207,6 +211,12 @@ export class ApplicationsService {
     idempotencyKey?: string,
   ) {
     const { client } = await this.router.forAccount(accountId);
+    const pre = await client.application.findFirst({
+      where: { id: applicationId, accountId },
+      select: { jobId: true },
+    });
+    if (!pre) throw new NotFoundException('Application not found');
+    await this.jobPermissions.assertCanMoveApplications(accountId, pre.jobId, actorUserId);
 
     return client.$transaction(async (tx) => {
       // Idempotent replay: if this exact retry already landed, surface the

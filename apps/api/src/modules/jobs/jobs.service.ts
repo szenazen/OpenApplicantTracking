@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '.prisma/regional';
+import { JobPermissionsService } from '../../common/job-permissions.service';
+import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { ReactionsService } from '../reactions/reactions.service';
 import { JobMembersService } from '../job-members/job-members.service';
@@ -17,6 +19,8 @@ export interface CreateJobInput {
   employmentType?: EmploymentType;
   pipelineId?: string;
   requiredSkillIds?: string[];
+  /** When omitted, defaults to the creating user (primary recruiter). */
+  ownerId?: string;
 }
 
 /**
@@ -36,6 +40,8 @@ export interface UpdateJobInput {
   status?: JobStatus;
   requiredSkillIds?: string[];
   pipelineId?: string;
+  /** Set to `null` to clear owner; aligns JobMember OWNER rows. */
+  ownerId?: string | null;
 }
 
 /**
@@ -57,8 +63,10 @@ export interface ListJobsQuery {
 export class JobsService {
   constructor(
     private readonly router: RegionRouterService,
+    private readonly global: GlobalPrismaService,
     private readonly reactions: ReactionsService,
     private readonly members: JobMembersService,
+    private readonly jobPermissions: JobPermissionsService,
   ) {}
 
   /**
@@ -169,12 +177,22 @@ export class JobsService {
     const totalByJob = new Map(counts.map((c) => [c.jobId, c._count._all] as const));
     const activeByJob = new Map(activeCounts.map((c) => [c.jobId, c._count._all] as const));
 
+    const ownerIds = Array.from(new Set(page.map((j) => j.ownerId).filter(Boolean))) as string[];
+    const ownerRows = ownerIds.length
+      ? await this.global.user.findMany({
+          where: { id: { in: ownerIds } },
+          select: { id: true, displayName: true, email: true, avatarUrl: true },
+        })
+      : [];
+    const ownerById = new Map(ownerRows.map((u) => [u.id, u] as const));
+
     const items = page.map((j) => ({
       ...j,
       candidateCounts: {
         total: totalByJob.get(j.id) ?? 0,
         active: activeByJob.get(j.id) ?? 0,
       },
+      owner: j.ownerId ? (ownerById.get(j.ownerId) ?? null) : null,
     }));
 
     const last = page.at(-1);
@@ -234,7 +252,14 @@ export class JobsService {
         })
       : [];
 
-    return { ...job, applications, members, requiredSkills };
+    const owner = job.ownerId
+      ? await this.global.user.findUnique({
+          where: { id: job.ownerId },
+          select: { id: true, displayName: true, email: true, avatarUrl: true },
+        })
+      : null;
+
+    return { ...job, applications, members, requiredSkills, owner };
   }
 
   /**
@@ -257,6 +282,8 @@ export class JobsService {
     input: UpdateJobInput,
     actorUserId: string,
   ) {
+    await this.jobPermissions.assertCanEditJob(accountId, jobId, actorUserId);
+
     const { client } = await this.router.forAccount(accountId);
     const current = await client.job.findFirst({ where: { id: jobId, accountId } });
     if (!current) throw new NotFoundException('Job not found');
@@ -330,6 +357,24 @@ export class JobsService {
       }
     }
 
+    if (input.ownerId !== undefined) {
+      const next = input.ownerId;
+      if (next !== current.ownerId) {
+        if (next) {
+          const membership = await this.global.membership.findUnique({
+            where: { userId_accountId: { userId: next, accountId } },
+            select: { status: true },
+          });
+          if (!membership || membership.status !== 'ACTIVE') {
+            throw new ForbiddenException('Owner must be an active member of this account');
+          }
+        }
+        data.ownerId = next;
+        changedFields.push('ownerId');
+        diff.ownerId = { from: current.ownerId ?? null, to: next ?? null };
+      }
+    }
+
     if (changedFields.length === 0) {
       return current;
     }
@@ -351,10 +396,13 @@ export class JobsService {
       });
       return u;
     });
+    if (changedFields.includes('ownerId')) {
+      await this.members.syncOwnerRole(accountId, jobId, updated.ownerId ?? null, actorUserId);
+    }
     return updated;
   }
 
-  async create(accountId: string, input: CreateJobInput) {
+  async create(accountId: string, input: CreateJobInput, actorUserId: string) {
     const { client } = await this.router.forAccount(accountId);
     let pipelineId = input.pipelineId;
     if (!pipelineId) {
@@ -364,7 +412,19 @@ export class JobsService {
       if (!defaultPipeline) throw new BadRequestException('No default pipeline and no pipelineId provided');
       pipelineId = defaultPipeline.id;
     }
-    return client.job.create({
+
+    const ownerId = input.ownerId ?? actorUserId;
+    if (ownerId) {
+      const membership = await this.global.membership.findUnique({
+        where: { userId_accountId: { userId: ownerId, accountId } },
+        select: { status: true },
+      });
+      if (!membership || membership.status !== 'ACTIVE') {
+        throw new ForbiddenException('Owner must be an active member of this account');
+      }
+    }
+
+    const job = await client.job.create({
       data: {
         accountId,
         title: input.title,
@@ -372,8 +432,6 @@ export class JobsService {
         department: input.department,
         location: input.location,
         clientName: input.clientName,
-        // Coerce to a sane positive integer — the DB default is 1 when the
-        // field is omitted so the column always has a value.
         headCount:
           input.headCount === undefined
             ? undefined
@@ -383,8 +441,13 @@ export class JobsService {
         requiredSkillIds: input.requiredSkillIds ?? [],
         status: 'PUBLISHED',
         openedAt: new Date(),
+        ownerId: ownerId || undefined,
       },
     });
+    if (ownerId) {
+      await this.members.syncOwnerRole(accountId, job.id, ownerId, actorUserId);
+    }
+    return job;
   }
 }
 

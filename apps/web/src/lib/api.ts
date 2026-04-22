@@ -62,6 +62,28 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   return body as T;
 }
 
+/** Plain-text GET (CSV export, etc.) — does not set Content-Type: json on the request. */
+export async function apiText(path: string, opts: Omit<ApiOptions, 'body'> = {}): Promise<string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const accountId = opts.accountId ?? (opts.withAccount === false ? null : getActiveAccountId());
+  if (accountId) headers['x-account-id'] = accountId;
+  if (opts.headers) Object.assign(headers, opts.headers);
+  const res = await fetch(`${API_PREFIX}${path}`, {
+    method: opts.method ?? 'GET',
+    headers,
+    cache: 'no-store',
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    const body = text ? safeJson(text) : undefined;
+    const msg = (body as any)?.message ?? res.statusText ?? 'Request failed';
+    throw new ApiError(res.status, body, Array.isArray(msg) ? msg.join(', ') : String(msg));
+  }
+  return text;
+}
+
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -88,6 +110,14 @@ export interface LoginResponse {
 export type JobStatus = 'DRAFT' | 'PUBLISHED' | 'ON_HOLD' | 'CLOSED' | 'ARCHIVED';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP' | 'TEMPORARY';
 
+/** Recruiter owner on the job (`Job.ownerId`), resolved on detail + list. */
+export interface JobOwnerRef {
+  id: string;
+  displayName: string | null;
+  email: string;
+  avatarUrl?: string | null;
+}
+
 export interface JobSummary {
   id: string;
   title: string;
@@ -109,6 +139,8 @@ export interface JobSummary {
   openedAt?: string | null;
   closedAt?: string | null;
   createdAt?: string;
+  owner?: JobOwnerRef | null;
+  ownerId?: string | null;
 }
 
 /**
@@ -221,6 +253,7 @@ export interface UpdateJobInput {
   status?: JobStatus;
   requiredSkillIds?: string[];
   pipelineId?: string;
+  ownerId?: string | null;
 }
 
 /** Matches the backend `StatusCategory` enum (see regional.prisma). */
@@ -473,6 +506,17 @@ export interface HiresOverTimeEntry {
   count: number;
 }
 
+export interface StageDropOffEntry {
+  statusId: string;
+  name: string;
+  position: number;
+  category: string;
+  advancedCount: number;
+  droppedCount: number;
+  exitTotal: number;
+  dropOffRatePct: number | null;
+}
+
 export interface JobReport {
   jobId: string;
   generatedAt: string;
@@ -488,6 +532,12 @@ export interface JobReport {
     dropped: number;
     inProgress: number;
   };
+  rates: {
+    hiredOfApplicantsPct: number | null;
+    droppedOfApplicantsPct: number | null;
+    inPipelineOfApplicantsPct: number | null;
+  };
+  stageDropOff: StageDropOffEntry[];
 }
 
 /** A resolved skill (id + display name) from the regional skill cache. */

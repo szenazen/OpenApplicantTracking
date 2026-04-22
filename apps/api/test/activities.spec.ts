@@ -146,6 +146,7 @@ describe('Activities feed (integration)', () => {
     await regional.application.deleteMany({ where: { accountId } });
     await regional.candidate.deleteMany({ where: { accountId } });
     await regional.jobNote.deleteMany({ where: { accountId } });
+    await regional.jobMember.deleteMany({ where: { accountId } });
     await regional.job.deleteMany({ where: { accountId } });
     await regional.pipelineStatus.deleteMany({ where: { pipeline: { accountId } } });
     await regional.pipeline.deleteMany({ where: { accountId } });

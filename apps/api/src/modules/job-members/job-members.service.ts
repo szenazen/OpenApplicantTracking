@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JobMemberRole, Prisma } from '.prisma/regional';
+import { JobPermissionsService } from '../../common/job-permissions.service';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -42,6 +43,7 @@ export class JobMembersService {
     private readonly router: RegionRouterService,
     private readonly global: GlobalPrismaService,
     private readonly notifications: NotificationsService,
+    private readonly jobPermissions: JobPermissionsService,
   ) {}
 
   async listForJob(accountId: string, jobId: string) {
@@ -62,6 +64,8 @@ export class JobMembersService {
   ) {
     if (!input.userId) throw new BadRequestException('userId is required');
     const role = parseRole(input.role) ?? JobMemberRole.RECRUITER;
+
+    await this.jobPermissions.assertCanManageJobTeam(accountId, jobId, actorUserId);
 
     const { client } = await this.router.forAccount(accountId);
     await this.assertJob(client, accountId, jobId);
@@ -135,6 +139,8 @@ export class JobMembersService {
     });
     if (!current) throw new NotFoundException('Job member not found');
 
+    await this.jobPermissions.assertCanManageJobTeam(accountId, current.jobId, actorUserId);
+
     const updated = await client.$transaction(async (tx) => {
       const next = await tx.jobMember.update({
         where: { id: jobMemberId },
@@ -161,6 +167,8 @@ export class JobMembersService {
       where: { id: jobMemberId, accountId },
     });
     if (!current) throw new NotFoundException('Job member not found');
+
+    await this.jobPermissions.assertCanManageJobTeam(accountId, current.jobId, actorUserId);
 
     await client.$transaction(async (tx) => {
       await tx.jobMember.delete({ where: { id: jobMemberId } });
@@ -201,6 +209,60 @@ export class JobMembersService {
       byJob.set(m.jobId, bucket);
     }
     return byJob;
+  }
+
+  /**
+   * Keeps `JobMember` OWNER rows aligned with `Job.ownerId`. Does not emit
+   * assignment notifications (those are reserved for explicit team adds).
+   */
+  async syncOwnerRole(
+    accountId: string,
+    jobId: string,
+    ownerUserId: string | null,
+    actorUserId: string,
+  ) {
+    const { client } = await this.router.forAccount(accountId);
+    await this.assertJob(client, accountId, jobId);
+
+    if (ownerUserId) {
+      const membership = await this.global.membership.findUnique({
+        where: { userId_accountId: { userId: ownerUserId, accountId } },
+        select: { status: true },
+      });
+      if (!membership || membership.status !== 'ACTIVE') {
+        throw new ForbiddenException('Owner must be an active member of this account');
+      }
+    }
+
+    await client.$transaction(async (tx) => {
+      if (ownerUserId) {
+        await tx.jobMember.updateMany({
+          where: {
+            accountId,
+            jobId,
+            role: JobMemberRole.OWNER,
+            userId: { not: ownerUserId },
+          },
+          data: { role: JobMemberRole.RECRUITER },
+        });
+        await tx.jobMember.upsert({
+          where: { jobId_userId: { jobId, userId: ownerUserId } },
+          create: {
+            accountId,
+            jobId,
+            userId: ownerUserId,
+            role: JobMemberRole.OWNER,
+            createdBy: actorUserId,
+          },
+          update: { role: JobMemberRole.OWNER },
+        });
+      } else {
+        await tx.jobMember.updateMany({
+          where: { accountId, jobId, role: JobMemberRole.OWNER },
+          data: { role: JobMemberRole.RECRUITER },
+        });
+      }
+    });
   }
 
   private async assertJob(

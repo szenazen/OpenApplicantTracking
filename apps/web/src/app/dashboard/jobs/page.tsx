@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Building2, Filter, MapPin, Plus, Search, Users } from 'lucide-react';
 import {
@@ -244,6 +243,7 @@ export default function JobsTablePage() {
             <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Owner</th>
                 <th className="px-3 py-2">Client</th>
                 <th className="px-3 py-2">Location</th>
                 <th className="px-3 py-2 text-right"># of Candidates</th>
@@ -325,26 +325,38 @@ function StatusFilter({
 }
 
 function JobRow({ j }: { j: JobListItem }) {
+  const router = useRouter();
   const palette = avatarColor(j.id);
   const initials = j.clientName
     ? getInitials(j.clientName)
     : getInitials(j.title);
+  const go = () => router.push(`/dashboard/jobs/${j.id}`);
   return (
     <tr
-      className="cursor-default transition hover:bg-slate-50"
+      role="link"
+      tabIndex={0}
+      onClick={go}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          go();
+        }
+      }}
+      className="cursor-pointer transition hover:bg-slate-50"
       data-testid="jobs-row"
       data-job-id={j.id}
     >
       <td className="px-3 py-2">
-        <Link
-          href={`/dashboard/jobs/${j.id}`}
-          className="font-medium text-brand-700 hover:underline"
-          data-testid="jobs-title"
-        >
+        <span className="font-medium text-brand-700" data-testid="jobs-title">
           {j.title}
-        </Link>
+        </span>
         {j.department && (
           <div className="text-[11px] text-slate-500">{j.department}</div>
+        )}
+      </td>
+      <td className="px-3 py-2 align-top text-xs text-slate-700" data-testid="jobs-owner">
+        {j.owner?.displayName || j.owner?.email || (
+          <span className="text-slate-400">—</span>
         )}
       </td>
       <td className="px-3 py-2 align-top">

@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-react';
 import {
   api,
   ApiError,
+  type AccountMember,
   type EmploymentType,
   type JobStatus,
   type JobSummary,
@@ -63,6 +64,8 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
   );
   const [skillQuery, setSkillQuery] = useState('');
   const [skillResults, setSkillResults] = useState<SkillOption[]>([]);
+  const [ownerUserId, setOwnerUserId] = useState<string>(job.owner?.id ?? '');
+  const [accountMembers, setAccountMembers] = useState<AccountMember[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -79,8 +82,17 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
     setSelectedSkills(job.requiredSkills ?? (job.requiredSkillIds ?? []).map((id) => ({ id, name: id })));
     setSkillQuery('');
     setSkillResults([]);
+    setOwnerUserId(job.owner?.id ?? '');
+    setAccountMembers(null);
     setErr(null);
   }, [open, job]);
+
+  useEffect(() => {
+    if (!open) return;
+    api<AccountMember[]>('/accounts/current/members')
+      .then(setAccountMembers)
+      .catch(() => setAccountMembers([]));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -161,6 +173,11 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
     const sameSet =
       currentIds.size === nextSet.size && [...currentIds].every((id) => nextSet.has(id));
     if (!sameSet) patch.requiredSkillIds = nextIds;
+
+    const curOwnerId = job.owner?.id ?? '';
+    if (ownerUserId !== curOwnerId) {
+      patch.ownerId = ownerUserId === '' ? null : ownerUserId;
+    }
     return patch;
   }
 
@@ -181,7 +198,11 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
       const updated = await api<JobSummary>(`/jobs/${job.id}`, { method: 'PATCH', body: patch });
       // Preserve the locally-known resolved skills so the header / summary
       // re-render immediately without a second round-trip for /jobs/:id.
-      onSaved({ ...updated, requiredSkills: selectedSkills });
+      onSaved({
+        ...updated,
+        requiredSkills: selectedSkills,
+        owner: updated.owner ?? null,
+      });
       onClose();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Failed to save');
@@ -232,6 +253,23 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
               data-testid="edit-job-title-input"
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
+          </Field>
+
+          <Field label="Owner (recruiter)">
+            <select
+              value={ownerUserId}
+              onChange={(e) => setOwnerUserId(e.target.value)}
+              disabled={!accountMembers}
+              data-testid="edit-job-owner"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-slate-50"
+            >
+              <option value="">Unassigned</option>
+              {(accountMembers ?? []).map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.displayName || m.email}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <Field label="Department">

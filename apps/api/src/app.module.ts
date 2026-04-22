@@ -25,6 +25,7 @@ import { HomeModule } from './modules/home/home.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SearchModule } from './modules/search/search.module';
+import { JobPermissionsModule } from './common/job-permissions.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SearchModule } from './modules/search/search.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     RegionRouterModule,
+    JobPermissionsModule,
     HealthModule,
     AuthModule,
     UsersModule,

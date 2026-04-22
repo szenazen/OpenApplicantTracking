@@ -25,6 +25,22 @@ export interface HiresOverTimeEntry {
   count: number;
 }
 
+/** Per-stage exits: progressed vs dropped (for drop-off analysis). */
+export interface StageDropOffEntry {
+  statusId: string;
+  name: string;
+  position: number;
+  category: string;
+  /** Transitions from this stage to a non-DROPPED status. */
+  advancedCount: number;
+  /** Transitions from this stage into DROPPED. */
+  droppedCount: number;
+  /** advanced + dropped */
+  exitTotal: number;
+  /** 100 * dropped / exitTotal when exitTotal > 0 */
+  dropOffRatePct: number | null;
+}
+
 export interface JobReport {
   jobId: string;
   generatedAt: string;
@@ -40,22 +56,23 @@ export interface JobReport {
     dropped: number;
     inProgress: number;
   };
+  /** Conversion snapshot from current funnel totals. */
+  rates: {
+    hiredOfApplicantsPct: number | null;
+    droppedOfApplicantsPct: number | null;
+    inPipelineOfApplicantsPct: number | null;
+  };
+  /** Where candidates leave the funnel (stage → dropped vs progressed). */
+  stageDropOff: StageDropOffEntry[];
 }
 
 /**
- * Job-scoped analytics feeding the Reports tab.
+ * Job-scoped analytics feeding the Reports tab + CSV export.
  *
- * Three reports, all explainable from first-principles queries so the UI
- * never has to "trust" an opaque number:
- *
- *   1. Funnel — current applications per pipeline stage (snapshot).
- *   2. Time-in-stage — average dwell time in each stage, computed from
- *      consecutive `ApplicationTransition` rows (the stays between moves).
- *   3. Hires over time — daily count of transitions into a HIRED-category
- *      stage over a configurable window (default 30 days).
- *
- * All queries are tenant-scoped by `accountId` (defense in depth) and
- * job-scoped by `jobId` so multi-tenant access is safe.
+ * Explainer-first queries only — no opaque ML. Phase 9 adds:
+ *   - Stage drop-off (exits from each stage to DROPPED vs forward),
+ *   - Conversion rate tiles (hired / dropped / in-pipeline as % of applicants),
+ *   - `csvForJob` for spreadsheet hand-off.
  */
 @Injectable()
 export class ReportsService {
@@ -76,6 +93,7 @@ export class ReportsService {
     if (!job) throw new NotFoundException('Job not found');
 
     const statuses = job.pipeline.statuses;
+    const statusCategory = new Map(statuses.map((s) => [s.id, s.category] as const));
 
     // --- Funnel: current snapshot ------------------------------------------
     const apps = await client.application.findMany({
@@ -105,13 +123,11 @@ export class ReportsService {
     let prevStatusId: string | null = null;
     for (const t of transitions) {
       if (t.applicationId !== prevAppId) {
-        // new application — the first transition is the "enter" into toStatus.
         prevAppId = t.applicationId;
         prevEnter = t.createdAt;
         prevStatusId = t.toStatusId;
         continue;
       }
-      // Closing a stay in `prevStatusId` — dwell = now - prevEnter.
       if (prevStatusId && prevEnter) {
         const seconds = Math.max(0, (t.createdAt.getTime() - prevEnter.getTime()) / 1000);
         const agg = dwellByStatus.get(prevStatusId) ?? { total: 0, count: 0 };
@@ -134,6 +150,36 @@ export class ReportsService {
       };
     });
 
+    // --- Stage drop-off: fromStatus → DROPPED vs forward --------------------
+    const advancedFrom = new Map<string, number>();
+    const droppedFrom = new Map<string, number>();
+    for (const t of transitions) {
+      if (!t.fromStatusId) continue;
+      const toCat = statusCategory.get(t.toStatusId);
+      if (toCat === 'DROPPED') {
+        droppedFrom.set(t.fromStatusId, (droppedFrom.get(t.fromStatusId) ?? 0) + 1);
+      } else {
+        advancedFrom.set(t.fromStatusId, (advancedFrom.get(t.fromStatusId) ?? 0) + 1);
+      }
+    }
+
+    const stageDropOff: StageDropOffEntry[] = statuses.map((s) => {
+      const advancedCount = advancedFrom.get(s.id) ?? 0;
+      const droppedCount = droppedFrom.get(s.id) ?? 0;
+      const exitTotal = advancedCount + droppedCount;
+      return {
+        statusId: s.id,
+        name: s.name,
+        position: s.position,
+        category: s.category,
+        advancedCount,
+        droppedCount,
+        exitTotal,
+        dropOffRatePct:
+          exitTotal > 0 ? Math.round((1000 * droppedCount) / exitTotal) / 10 : null,
+      };
+    });
+
     // --- Hires over time ----------------------------------------------------
     const hiredStatusIds = statuses.filter((s) => s.category === 'HIRED').map((s) => s.id);
     const droppedStatusIds = statuses.filter((s) => s.category === 'DROPPED').map((s) => s.id);
@@ -152,7 +198,6 @@ export class ReportsService {
       : [];
 
     const buckets = new Map<string, number>();
-    // Pre-seed every day in the window so the UI gets a dense series.
     for (let d = 0; d < windowDays; d++) {
       const day = new Date(since.getTime() + d * 24 * 60 * 60 * 1000);
       buckets.set(isoDate(day), 0);
@@ -165,12 +210,18 @@ export class ReportsService {
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([date, count]) => ({ date, count }));
 
-    // --- Totals (funnel totals by category, snapshot) -----------------------
     const totals = {
       applications: apps.length,
       hired: apps.filter((a) => hiredStatusIds.includes(a.currentStatusId)).length,
       dropped: apps.filter((a) => droppedStatusIds.includes(a.currentStatusId)).length,
       inProgress: apps.filter((a) => inProgressIds.includes(a.currentStatusId)).length,
+    };
+
+    const n = totals.applications;
+    const rates = {
+      hiredOfApplicantsPct: n > 0 ? Math.round((1000 * totals.hired) / n) / 10 : null,
+      droppedOfApplicantsPct: n > 0 ? Math.round((1000 * totals.dropped) / n) / 10 : null,
+      inPipelineOfApplicantsPct: n > 0 ? Math.round((1000 * totals.inProgress) / n) / 10 : null,
     };
 
     return {
@@ -180,11 +231,85 @@ export class ReportsService {
       timeInStage,
       hiresOverTime: { windowDays, series },
       totals,
+      rates,
+      stageDropOff,
     };
+  }
+
+  /**
+   * RFC4180-style CSV for recruiters (Excel / Sheets). UTF-8 with BOM so
+   * Excel picks up encoding on Windows.
+   */
+  async csvForJob(accountId: string, jobId: string, opts: { windowDays?: number } = {}): Promise<string> {
+    const report = await this.forJob(accountId, jobId, opts);
+    const lines: string[] = [];
+    const esc = (v: string | number | null | undefined) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    lines.push('\ufeffsection,key,value');
+    lines.push(`meta,jobId,${esc(report.jobId)}`);
+    lines.push(`meta,generatedAt,${esc(report.generatedAt)}`);
+    lines.push(`meta,reportWindowDays,${report.hiresOverTime.windowDays}`);
+
+    lines.push('totals,applications,' + report.totals.applications);
+    lines.push('totals,hired,' + report.totals.hired);
+    lines.push('totals,dropped,' + report.totals.dropped);
+    lines.push('totals,inProgress,' + report.totals.inProgress);
+    lines.push('rates,hiredOfApplicantsPct,' + esc(report.rates.hiredOfApplicantsPct));
+    lines.push('rates,droppedOfApplicantsPct,' + esc(report.rates.droppedOfApplicantsPct));
+    lines.push('rates,inPipelineOfApplicantsPct,' + esc(report.rates.inPipelineOfApplicantsPct));
+
+    lines.push('funnel,statusId,name,category,position,count');
+    for (const f of report.funnel) {
+      lines.push(
+        ['funnel', esc(f.statusId), esc(f.name), esc(f.category), f.position, f.count].join(','),
+      );
+    }
+
+    lines.push('dropOff,statusId,name,category,position,advancedCount,droppedCount,exitTotal,dropOffRatePct');
+    for (const d of report.stageDropOff) {
+      lines.push(
+        [
+          'dropOff',
+          esc(d.statusId),
+          esc(d.name),
+          esc(d.category),
+          d.position,
+          d.advancedCount,
+          d.droppedCount,
+          d.exitTotal,
+          esc(d.dropOffRatePct),
+        ].join(','),
+      );
+    }
+
+    lines.push('timeInStage,statusId,name,position,avgSeconds,sampleSize');
+    for (const t of report.timeInStage) {
+      lines.push(
+        [
+          'timeInStage',
+          esc(t.statusId),
+          esc(t.name),
+          t.position,
+          t.avgSeconds == null ? '' : Math.round(t.avgSeconds),
+          t.sampleSize,
+        ].join(','),
+      );
+    }
+
+    lines.push('hiresByDay,date,count');
+    for (const h of report.hiresOverTime.series) {
+      lines.push(['hiresByDay', esc(h.date), h.count].join(','));
+    }
+
+    return lines.join('\r\n');
   }
 }
 
 function isoDate(d: Date): string {
-  // YYYY-MM-DD in UTC so buckets are stable regardless of server tz.
   return d.toISOString().slice(0, 10);
 }

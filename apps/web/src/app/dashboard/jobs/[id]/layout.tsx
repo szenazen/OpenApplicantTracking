@@ -52,7 +52,10 @@ export default function JobLayout({
   }, [params.id]);
 
   if (err) return <p className="p-6 text-sm text-red-700">{err}</p>;
-  if (!data) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
+  // Avoid one frame (or more) of the *previous* job's payload after `params.id`
+  // changes — React runs effects after paint, so `data` can still reference
+  // the old requisition until the new fetch settles.
+  if (!data || data.id !== params.id) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
   const patchJob = (patch: Partial<JobSummary>) => {
     setData((d) => (d ? { ...d, ...patch } : d));
