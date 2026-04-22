@@ -108,6 +108,56 @@ export interface JobSummary {
   closedAt?: string | null;
 }
 
+/**
+ * Aggregated payload for the recruiter home dashboard (`GET /home`).
+ * One round-trip serves every block on `/dashboard` so the page can render
+ * once with no waterfall.
+ */
+export interface HomeSummary {
+  generatedAt: string;
+  window: {
+    recentDays: number;
+    stuckThresholdDays: number;
+  };
+  jobs: {
+    total: number;
+    byStatus: Record<JobStatus, number>;
+  };
+  pipeline: {
+    applications: number;
+    inPipeline: number;
+    hiredCurrent: number;
+    droppedCurrent: number;
+    hiresInWindow: number;
+    dropsInWindow: number;
+  };
+  attention: Array<{
+    id: string;
+    title: string;
+    department?: string | null;
+    location?: string | null;
+    status: JobStatus | string;
+    lastActivityAt: string;
+    stuckCount: number;
+  }>;
+  myJobs: Array<{
+    id: string;
+    title: string;
+    status: JobStatus | string;
+    department?: string | null;
+    location?: string | null;
+    role: string | null;
+  }>;
+  recentActivity: Array<{
+    id: string;
+    createdAt: string;
+    action: string;
+    resource: string;
+    metadata: Record<string, unknown>;
+    actor: { id: string; displayName: string | null; email: string; avatarUrl: string | null } | null;
+  }>;
+}
+
 /** Partial-update payload for `PATCH /jobs/:id`. */
 export interface UpdateJobInput {
   title?: string;
