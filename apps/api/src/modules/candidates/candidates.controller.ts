@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -45,6 +45,25 @@ class CreateCandidateDto {
   skills?: CandidateSkillDto[];
 }
 
+/**
+ * Partial update DTO. Omitted fields are untouched. Explicit `null` on a
+ * nullable column clears it. `@IsOptional()` already short-circuits all
+ * other validators when the value is null/undefined, so we can keep the
+ * decorators tidy.
+ */
+class UpdateCandidateDto {
+  @IsOptional() @IsString() @MinLength(1) firstName?: string;
+  @IsOptional() @IsString() @MinLength(1) lastName?: string;
+  @IsOptional() @IsEmail() email?: string | null;
+  @IsOptional() @IsString() phone?: string | null;
+  @IsOptional() @IsString() headline?: string | null;
+  @IsOptional() @IsString() location?: string | null;
+  @IsOptional() @IsString() currentCompany?: string | null;
+  @IsOptional() @IsString() currentTitle?: string | null;
+  @IsOptional() @IsInt() @Min(0) yearsExperience?: number | null;
+  @IsOptional() @IsString() summary?: string | null;
+}
+
 @ApiTags('candidates')
 @ApiBearerAuth()
 @ApiHeader({ name: 'x-account-id', required: true })
@@ -66,5 +85,15 @@ export class CandidatesController {
   @Post()
   create(@AccountId() accountId: string, @Body() dto: CreateCandidateDto) {
     return this.svc.create(accountId, dto);
+  }
+
+  /**
+   * Partial update from the candidate drawer's inline-edit mode. We keep
+   * skill edits in a separate flow so drawer edits can never silently
+   * wipe a candidate's tag set — that would be a painful regression.
+   */
+  @Patch(':id')
+  update(@AccountId() accountId: string, @Param('id') id: string, @Body() dto: UpdateCandidateDto) {
+    return this.svc.update(accountId, id, dto);
   }
 }

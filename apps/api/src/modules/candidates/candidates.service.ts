@@ -25,6 +25,25 @@ export interface CreateCandidateInput {
   skillIds?: string[];
 }
 
+/**
+ * Partial candidate update. Fields omitted are untouched; fields set to
+ * `null` on nullable columns are cleared. Skills are deliberately out of
+ * scope — those are edited via a dedicated flow to avoid accidentally
+ * wiping someone's tag set on a minor inline edit.
+ */
+export interface UpdateCandidateInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string | null;
+  phone?: string | null;
+  headline?: string | null;
+  location?: string | null;
+  currentCompany?: string | null;
+  currentTitle?: string | null;
+  yearsExperience?: number | null;
+  summary?: string | null;
+}
+
 @Injectable()
 export class CandidatesService {
   constructor(private readonly router: RegionRouterService) {}
@@ -90,6 +109,54 @@ export class CandidatesService {
     });
     if (!c) throw new NotFoundException('Candidate not found');
     return c;
+  }
+
+  /**
+   * Partial update with an explicit "field was sent" test so clients can
+   * pass `null` to clear a nullable column (e.g. remove a phone number)
+   * without us mistaking an omitted field for an intent to clear it.
+   */
+  async update(accountId: string, candidateId: string, input: UpdateCandidateInput) {
+    const { client } = await this.router.forAccount(accountId);
+    const current = await client.candidate.findFirst({ where: { id: candidateId, accountId } });
+    if (!current) throw new NotFoundException('Candidate not found');
+
+    const data: Record<string, unknown> = {};
+    const set = <K extends keyof UpdateCandidateInput>(key: K) => {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
+        data[key as string] = input[key];
+      }
+    };
+    (['firstName', 'lastName'] as const).forEach((k) => {
+      if (Object.prototype.hasOwnProperty.call(input, k)) {
+        const v = input[k];
+        if (typeof v !== 'string' || v.trim().length === 0) {
+          // Required columns — never let an empty string clobber a name.
+          return;
+        }
+        data[k] = v.trim();
+      }
+    });
+    (
+      ['email', 'phone', 'headline', 'location', 'currentCompany', 'currentTitle', 'summary'] as const
+    ).forEach(set);
+    if (Object.prototype.hasOwnProperty.call(input, 'yearsExperience')) {
+      data.yearsExperience =
+        input.yearsExperience === null || input.yearsExperience === undefined
+          ? null
+          : Math.max(0, Math.round(Number(input.yearsExperience)));
+    }
+    if (Object.keys(data).length === 0) {
+      return client.candidate.findUniqueOrThrow({
+        where: { id: candidateId },
+        include: { skills: { include: { skill: true } } },
+      });
+    }
+    return client.candidate.update({
+      where: { id: candidateId },
+      data,
+      include: { skills: { include: { skill: true } } },
+    });
   }
 
   async create(accountId: string, input: CreateCandidateInput) {
