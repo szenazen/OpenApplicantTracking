@@ -72,7 +72,7 @@ export function JobHeader({ job, pipeline, applications, members }: Props) {
   return (
     <div className="border-b border-slate-200 bg-white px-6 pt-3">
       <Link
-        href="/dashboard"
+        href="/dashboard/jobs"
         className="mb-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
       >
         <ArrowLeft size={12} /> back to jobs
