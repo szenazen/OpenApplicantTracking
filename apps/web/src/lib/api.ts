@@ -85,17 +85,39 @@ export interface LoginResponse {
   expiresIn: string;
 }
 
+export type JobStatus = 'DRAFT' | 'PUBLISHED' | 'ON_HOLD' | 'CLOSED' | 'ARCHIVED';
+export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP' | 'TEMPORARY';
+
 export interface JobSummary {
   id: string;
   title: string;
   description?: string | null;
   department?: string | null;
   location?: string | null;
-  employmentType?: string | null;
-  status: string;
+  employmentType?: EmploymentType | string | null;
+  status: JobStatus | string;
   pipelineId: string;
   requiredSkillIds?: string[];
+  /**
+   * Resolved skill objects (id + name) returned by `GET /jobs/:id` — prefer
+   * this over `requiredSkillIds` when rendering so the UI doesn't leak raw
+   * CUIDs. The list endpoint may not include this; fall back to ids there.
+   */
+  requiredSkills?: SkillRef[];
   openedAt?: string | null;
+  closedAt?: string | null;
+}
+
+/** Partial-update payload for `PATCH /jobs/:id`. */
+export interface UpdateJobInput {
+  title?: string;
+  description?: string | null;
+  department?: string | null;
+  location?: string | null;
+  employmentType?: EmploymentType;
+  status?: JobStatus;
+  requiredSkillIds?: string[];
+  pipelineId?: string;
 }
 
 /** Matches the backend `StatusCategory` enum (see regional.prisma). */

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowRight,
+  Briefcase,
   FileText,
   MessageSquare,
   Pencil,
@@ -202,6 +203,25 @@ function ActivityVerb({
       return <>edited a note on the job.</>;
     case 'note.deleted':
       return <>deleted a note on the job.</>;
+    case 'job.updated': {
+      const changed = Array.isArray(m.changedFields) ? (m.changedFields as string[]) : [];
+      if (changed.includes('status')) {
+        const diff = (m.diff as Record<string, { from: unknown; to: unknown }> | undefined)?.status;
+        const from = typeof diff?.from === 'string' ? diff!.from : '—';
+        const to = typeof diff?.to === 'string' ? diff!.to : '—';
+        return (
+          <>
+            changed job status{' '}
+            <StagePill>{from.replace(/_/g, ' ')}</StagePill>
+            <ArrowRight size={12} className="mx-1 inline-block text-slate-400" aria-hidden />
+            <StagePill>{to.replace(/_/g, ' ')}</StagePill>.
+          </>
+        );
+      }
+      if (changed.length === 0) return <>updated the job.</>;
+      const pretty = changed.map((f) => f.replace(/([A-Z])/g, ' $1').toLowerCase()).join(', ');
+      return <>updated job ({pretty}).</>;
+    }
     default:
       return <>{entry.action.replace(/\./g, ' ')}.</>;
   }
@@ -246,6 +266,9 @@ function kindVisual(action: string): { icon: LucideIcon; tone: string } {
   if (action.startsWith('note.')) {
     const icon = action.endsWith('.deleted') ? Trash2 : action.endsWith('.updated') ? Pencil : FileText;
     return { icon, tone: 'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-100' };
+  }
+  if (action.startsWith('job.')) {
+    return { icon: Briefcase, tone: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100' };
   }
   return { icon: FileText, tone: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200' };
 }

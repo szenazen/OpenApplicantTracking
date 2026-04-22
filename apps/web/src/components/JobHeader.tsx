@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
-import { ArrowLeft, Briefcase, Building2, MapPin, MoreHorizontal } from 'lucide-react';
-import type { ApplicationCard, JobMember, JobSummary, Pipeline } from '@/lib/api';
+import { useMemo, useState } from 'react';
+import { ArrowLeft, Briefcase, Building2, MapPin } from 'lucide-react';
+import { api, ApiError, type ApplicationCard, type JobMember, type JobStatus, type JobSummary, type Pipeline } from '@/lib/api';
+import { useJob } from '@/app/dashboard/jobs/[id]/JobContext';
+import { EditJobDialog } from './EditJobDialog';
+import { JobActionsMenu } from './JobActionsMenu';
 
 interface Props {
   job: JobSummary;
@@ -36,6 +39,23 @@ interface TabDef {
 export function JobHeader({ job, pipeline, applications, members }: Props) {
   const counts = useMemo(() => summarize(pipeline, applications), [pipeline, applications]);
   const pathname = usePathname() ?? '';
+  const { patchJob } = useJob();
+  const [editOpen, setEditOpen] = useState(false);
+  const [statusErr, setStatusErr] = useState<string | null>(null);
+
+  async function changeStatus(next: JobStatus) {
+    // Optimistic + reconcile. Failure surfaces a dismissible toast-lite in
+    // the header; full snackbar UX is covered by Phase 4 (notifications).
+    const prev = job.status;
+    patchJob({ status: next });
+    try {
+      await api(`/jobs/${job.id}`, { method: 'PATCH', body: { status: next } });
+    } catch (e) {
+      patchJob({ status: prev });
+      setStatusErr(e instanceof ApiError ? e.message : 'Failed to change status');
+      setTimeout(() => setStatusErr(null), 4000);
+    }
+  }
   const jobRoot = `/dashboard/jobs/${job.id}`;
   const tabs: TabDef[] = [
     { label: 'Candidates', subpath: '', badge: applications.length, testId: 'tab-candidates' },
@@ -106,15 +126,32 @@ export function JobHeader({ job, pipeline, applications, members }: Props) {
             testId="summary-in-pipeline"
           />
           <SummaryTile label="Dropped" value={counts.dropped} tone="danger" testId="summary-dropped" />
-          <button
-            type="button"
-            aria-label="Job actions"
-            className="self-start rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50"
-          >
-            <MoreHorizontal size={16} />
-          </button>
+          <JobActionsMenu
+            job={job}
+            pipeline={pipeline}
+            applications={applications}
+            onEdit={() => setEditOpen(true)}
+            onStatusChange={changeStatus}
+          />
         </div>
       </div>
+
+      {statusErr && (
+        <div
+          role="alert"
+          className="mt-2 inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-1 text-xs text-rose-700 ring-1 ring-inset ring-rose-200"
+          data-testid="job-status-error"
+        >
+          {statusErr}
+        </div>
+      )}
+
+      <EditJobDialog
+        job={job}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSaved={(next) => patchJob(next)}
+      />
 
       <nav className="mt-3 -mb-px flex items-center gap-4 overflow-x-auto text-sm" aria-label="Job sections">
         {tabs.map((t) => {

@@ -84,19 +84,22 @@ export default function JobSummaryPage() {
           </ol>
         </section>
 
-        {job.requiredSkillIds && job.requiredSkillIds.length > 0 && (
+        {(job.requiredSkills?.length ?? job.requiredSkillIds?.length ?? 0) > 0 && (
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-800">Required skills</h2>
             <p className="mt-1 text-xs text-slate-500">
               Used by Recommendations to score candidates against this job.
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5" data-testid="required-skills">
-              {job.requiredSkillIds.map((id) => (
+              {(job.requiredSkills && job.requiredSkills.length > 0
+                ? job.requiredSkills
+                : (job.requiredSkillIds ?? []).map((id) => ({ id, name: id }))
+              ).map((s) => (
                 <span
-                  key={id}
+                  key={s.id}
                   className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-inset ring-brand-200"
                 >
-                  {id}
+                  {s.name}
                 </span>
               ))}
             </div>

@@ -54,6 +54,10 @@ export default function JobLayout({
   if (err) return <p className="p-6 text-sm text-red-700">{err}</p>;
   if (!data) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
 
+  const patchJob = (patch: Partial<JobSummary>) => {
+    setData((d) => (d ? { ...d, ...patch } : d));
+  };
+
   return (
     <JobProvider
       value={{
@@ -64,6 +68,7 @@ export default function JobLayout({
         setLiveApplications: setLive,
         members,
         setMembers,
+        patchJob,
       }}
     >
       <div className="flex h-full flex-col">

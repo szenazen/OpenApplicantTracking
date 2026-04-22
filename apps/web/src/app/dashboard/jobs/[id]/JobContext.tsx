@@ -24,6 +24,12 @@ export interface JobContextValue {
   /** Team members on this job — owned by the layout, updated by the Team tab. */
   members: JobMember[];
   setMembers: (members: JobMember[]) => void;
+  /**
+   * Merge partial updates into the in-memory job (e.g. after a successful
+   * `PATCH /jobs/:id`) so the header + Summary tab reflect edits without a
+   * full page reload.
+   */
+  patchJob: (patch: Partial<JobSummary>) => void;
 }
 
 const Ctx = createContext<JobContextValue | null>(null);
