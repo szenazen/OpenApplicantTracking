@@ -76,3 +76,16 @@ export function formatYearsExperience(years?: number | null): string {
   if (years === 0) return '<1y';
   return `${Math.floor(years)}y`;
 }
+
+/**
+ * Whole-day diff between `iso` and `now`, floored to days. Returns `null`
+ * for missing / invalid input so callers can decide how to render the
+ * "unknown" case (typically: don't show the pill at all).
+ */
+export function daysSince(iso?: string | Date | null, now: Date = new Date()): number | null {
+  if (!iso) return null;
+  const then = iso instanceof Date ? iso : new Date(iso);
+  const ms = now.getTime() - then.getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return Math.floor(ms / 86_400_000);
+}

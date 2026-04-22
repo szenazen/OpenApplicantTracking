@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DragDropContext,
   Draggable,
@@ -9,11 +9,38 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd';
 import { io, Socket } from 'socket.io-client';
-import { Briefcase, Clock, Eye, MessageSquare, MoreVertical, Star, ThumbsDown, ThumbsUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  Briefcase,
+  Clock,
+  Eye,
+  MessageSquare,
+  MoreVertical,
+  Search,
+  Star,
+  ThumbsDown,
+  ThumbsUp,
+  X,
+} from 'lucide-react';
 import { api, ApplicationCard, Pipeline, PipelineStatus } from '@/lib/api';
 import { useAuth } from '@/lib/store';
-import { avatarColor, formatRelativeDuration, formatYearsExperience, getInitials } from '@/lib/format';
+import {
+  avatarColor,
+  daysSince,
+  formatRelativeDuration,
+  formatYearsExperience,
+  getInitials,
+} from '@/lib/format';
 import { PendingTransition, StageTransitionDialog } from './StageTransitionDialog';
+
+/**
+ * A card is "stuck" if it has sat in the same pipeline stage for at least
+ * this many days without moving. The threshold matches the home dashboard's
+ * `stuckThresholdDays` default — if either changes, we want both to
+ * surface the same signal to recruiters so the home feed and the board
+ * don't contradict each other.
+ */
+const STUCK_THRESHOLD_DAYS = 7;
 
 interface Props {
   jobId: string;
@@ -89,17 +116,66 @@ export function KanbanBoard({
     onCardsChange?.(cards);
   }, [cards, onCardsChange]);
 
-  // Group cards by status id (position-sorted) for the columns.
+  // -------------------- In-board search --------------------
+  //
+  // `query` drives a cheap client-side filter across the currently-loaded
+  // cards. We don't go to the server for this — the board already holds
+  // every active card for the job and server-side search would add an
+  // unnecessary round-trip for a small dataset. Pressing `/` focuses the
+  // input; Escape clears it. Matching is case-insensitive substring
+  // against candidate name / current title / current company / headline.
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      // Don't hijack `/` inside existing form controls or editable surfaces.
+      if (target && (target.isContentEditable || isFormField(target))) return;
+      if (searchRef.current) {
+        e.preventDefault();
+        searchRef.current.focus();
+        searchRef.current.select();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredCards = useMemo(() => {
+    if (!normalizedQuery) return cards;
+    return cards.filter((c) => matchesQuery(c, normalizedQuery));
+  }, [cards, normalizedQuery]);
+
+  // Group (filtered) cards by status id (position-sorted) for the columns.
   const columns = useMemo(() => {
     const byStatus = new Map<string, ApplicationCard[]>();
     for (const s of pipeline.statuses) byStatus.set(s.id, []);
-    for (const c of cards) {
+    for (const c of filteredCards) {
       const list = byStatus.get(c.currentStatusId);
       if (list) list.push(c);
     }
     for (const list of byStatus.values()) list.sort((a, b) => a.position - b.position);
     return byStatus;
+  }, [filteredCards, pipeline.statuses]);
+
+  // Per-status full counts (ignore the search) so the column count pill
+  // stays a stable "how many live cards are in this stage?" signal even
+  // when the visible list is narrowed by a query.
+  const totalCountsByStatus = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of pipeline.statuses) counts.set(s.id, 0);
+    for (const c of cards) counts.set(c.currentStatusId, (counts.get(c.currentStatusId) ?? 0) + 1);
+    return counts;
   }, [cards, pipeline.statuses]);
+
+  // A flat "no results" sentinel so we don't render an empty-but-intentional
+  // board as if it were a fresh job.
+  const visibleCount = filteredCards.length;
+  const totalCount = cards.length;
+  const hasNoMatches = normalizedQuery !== '' && visibleCount === 0;
 
   // Socket.IO subscription.
   useEffect(() => {
@@ -293,11 +369,74 @@ export function KanbanBoard({
     onOpenCard?.(applicationId);
   }
 
+  const clearQuery = useCallback(() => setQuery(''), []);
+
   return (
     <div className="flex h-full flex-col" data-testid="kanban-board">
       {error && (
         <div role="alert" className="mx-6 mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">
           {error}
+        </div>
+      )}
+      <div className="flex items-center gap-3 px-6 pt-4" data-testid="kanban-toolbar">
+        <div className="relative w-full max-w-xs">
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                if (query) {
+                  clearQuery();
+                } else {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }
+            }}
+            placeholder="Search candidates…  (/)"
+            className="block w-full rounded-md border border-slate-300 bg-white pl-7 pr-7 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            data-testid="kanban-search"
+            aria-label="Search candidates in this board"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={clearQuery}
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              data-testid="kanban-search-clear"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        {normalizedQuery && (
+          <span className="text-xs text-slate-500" data-testid="kanban-search-count">
+            {visibleCount} of {totalCount} {totalCount === 1 ? 'candidate' : 'candidates'}
+          </span>
+        )}
+      </div>
+      {hasNoMatches && (
+        <div
+          role="status"
+          className="mx-6 mt-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500"
+          data-testid="kanban-search-empty"
+        >
+          No candidates match &quot;{query}&quot;.{' '}
+          <button
+            type="button"
+            className="font-medium text-brand-600 hover:underline"
+            onClick={clearQuery}
+          >
+            Clear search
+          </button>
         </div>
       )}
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -315,7 +454,12 @@ export function KanbanBoard({
                   data-testid={`column-${s.id}`}
                   data-column-name={s.name}
                 >
-                  <ColumnHeader status={s} count={columns.get(s.id)?.length ?? 0} />
+                  <ColumnHeader
+                    status={s}
+                    count={totalCountsByStatus.get(s.id) ?? 0}
+                    visibleCount={columns.get(s.id)?.length ?? 0}
+                    filtered={normalizedQuery !== ''}
+                  />
                   <ul className="flex flex-1 flex-col gap-2">
                     {columns.get(s.id)?.map((card, idx) => (
                       <Draggable draggableId={card.id} index={idx} key={card.id}>
@@ -340,7 +484,7 @@ export function KanbanBoard({
                               }
                             }}
                           >
-                            <CandidateCardBody card={card} />
+                            <CandidateCardBody card={card} status={s} />
                           </li>
                         )}
                       </Draggable>
@@ -375,8 +519,23 @@ export function KanbanBoard({
   );
 }
 
-/** Column header with a status-color dot, name, count pill, and a kebab menu placeholder. */
-function ColumnHeader({ status, count }: { status: PipelineStatus; count: number }) {
+/**
+ * Column header with a status-color dot, name, count pill, and a kebab
+ * menu placeholder. While a search filter is active we surface a
+ * "visible / total" pair so recruiters can tell at a glance how many of
+ * the column's real cards matched the query.
+ */
+function ColumnHeader({
+  status,
+  count,
+  visibleCount,
+  filtered,
+}: {
+  status: PipelineStatus;
+  count: number;
+  visibleCount: number;
+  filtered: boolean;
+}) {
   const dotColor = status.color || categoryColor(status.category);
   return (
     <div className="mb-2 flex items-center justify-between">
@@ -390,8 +549,9 @@ function ColumnHeader({ status, count }: { status: PipelineStatus; count: number
         <span
           className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
           data-testid={`col-count-${status.id}`}
+          title={filtered ? `${visibleCount} visible of ${count} total` : undefined}
         >
-          {count}
+          {filtered ? `${visibleCount}/${count}` : count}
         </span>
       </div>
       <span className="text-slate-300" aria-hidden>
@@ -408,13 +568,19 @@ function ColumnHeader({ status, count }: { status: PipelineStatus; count: number
  * All text is gracefully optional: if a candidate has no current title we fall
  * back to their headline; if no company, we just show the title.
  */
-function CandidateCardBody({ card }: { card: ApplicationCard }) {
+function CandidateCardBody({ card, status }: { card: ApplicationCard; status: PipelineStatus }) {
   const { candidate } = card;
   const initials = getInitials(candidate.firstName, candidate.lastName);
   const palette = avatarColor(candidate.id || `${candidate.firstName}${candidate.lastName}`);
   const roleLine = buildRoleLine(candidate);
   const yoe = formatYearsExperience(candidate.yearsExperience);
   const timeInStage = formatRelativeDuration(card.lastTransitionAt);
+  // We treat HIRED / DROPPED as terminal — a hire sitting in "Hired" for
+  // weeks is expected, not a problem. Only active pipeline stages get the
+  // stuck signal so the amber pill stays a real action prompt.
+  const isTerminal = status.category === 'HIRED' || status.category === 'DROPPED';
+  const stageDays = isTerminal ? null : daysSince(card.lastTransitionAt);
+  const isStuck = stageDays !== null && stageDays >= STUCK_THRESHOLD_DAYS;
 
   return (
     <div className="flex items-start gap-3">
@@ -456,7 +622,7 @@ function CandidateCardBody({ card }: { card: ApplicationCard }) {
             <MoreVertical size={14} />
           </div>
         </div>
-        {(yoe || timeInStage) && (
+        {(yoe || timeInStage || isStuck) && (
           <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
             {yoe && (
               <span className="inline-flex items-center gap-1" data-testid="kanban-card-yoe" title="Years of experience">
@@ -465,11 +631,28 @@ function CandidateCardBody({ card }: { card: ApplicationCard }) {
             )}
             {timeInStage && (
               <span
-                className="inline-flex items-center gap-1"
+                className={
+                  'inline-flex items-center gap-1 ' +
+                  (isStuck ? 'text-amber-700' : '')
+                }
                 data-testid="kanban-card-time-in-stage"
-                title="Time in current stage"
+                title={
+                  isStuck
+                    ? `Stuck in ${status.name} for ${stageDays} day${stageDays === 1 ? '' : 's'}`
+                    : 'Time in current stage'
+                }
               >
                 <Clock size={11} /> {timeInStage}
+              </span>
+            )}
+            {isStuck && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                data-testid="kanban-card-stuck"
+                title={`No stage change in ${stageDays} day${stageDays === 1 ? '' : 's'} — review`}
+                aria-label={`Stuck for ${stageDays} day${stageDays === 1 ? '' : 's'}`}
+              >
+                <AlertTriangle size={10} /> Stuck
               </span>
             )}
           </div>
@@ -533,6 +716,37 @@ function CardBadges({ card }: { card: ApplicationCard }) {
       )}
     </div>
   );
+}
+
+/**
+ * Returns true if an element is a form field (input / textarea / select)
+ * where the `/` shortcut MUST NOT be hijacked. Using `tagName` keeps this
+ * allocation-free in the hot keydown path.
+ */
+function isFormField(el: HTMLElement): boolean {
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/**
+ * Case-insensitive substring match across candidate name / current role /
+ * current company / headline. Kept intentionally narrow so search results
+ * stay predictable — we don't index notes, comments, or skills here.
+ */
+function matchesQuery(card: ApplicationCard, needle: string): boolean {
+  const c = card.candidate;
+  const haystack = [
+    c.firstName,
+    c.lastName,
+    `${c.firstName ?? ''} ${c.lastName ?? ''}`,
+    c.currentTitle,
+    c.currentCompany,
+    c.headline,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(needle);
 }
 
 /** Best-effort "Role @ Company" / "Role" / "Headline" line. */
