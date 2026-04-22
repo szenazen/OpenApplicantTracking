@@ -10,7 +10,8 @@
  *       • Hays EU           (eu-west-1)
  *       • Hays Singapore    (ap-southeast-1)
  *   - Each account gets: default pipeline (already from AccountsService), 2 jobs,
- *     5 candidates, 7 applications spread across pipeline statuses.
+ *     5 candidates per job (10 applications per account) spread across that job's
+ *     pipeline statuses.
  *
  * Replicates `skills` into each regional `skill_cache`.
  *
@@ -238,6 +239,22 @@ async function main() {
           },
         });
 
+        // Always take statuses from *this job's* pipeline. Using the account
+        // default pipeline here breaks as soon as a job uses another pipeline
+        // (or the default was recreated): applications would point at foreign
+        // status ids that don't match the board, and in bad cases nothing gets
+        // created if ids diverged after a partial reset.
+        const jobPipeline = await regional.pipeline.findFirst({
+          where: { id: job.pipelineId, accountId: dir.id },
+          include: { statuses: { orderBy: { position: 'asc' } } },
+        });
+        if (!jobPipeline || jobPipeline.statuses.length === 0) {
+          console.warn(
+            `[seed] skip applications for job "${jt.title}" — pipeline ${job.pipelineId} missing or has no statuses`,
+          );
+          continue;
+        }
+
         // Five candidates + spread them across statuses
         const names = [
           ['Alice', 'Nguyen'], ['Bob', 'Martin'], ['Carla', 'Singh'],
@@ -273,13 +290,16 @@ async function main() {
               skipDuplicates: true,
             });
           }
-          const status = pipeline.statuses[i % pipeline.statuses.length]!;
+          const status = jobPipeline.statuses[i % jobPipeline.statuses.length]!;
           const pos = await regional.application.count({
             where: { jobId: job.id, currentStatusId: status.id },
           });
           const application = await regional.application.upsert({
             where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
-            update: {},
+            update: {
+              accountId: dir.id,
+              currentStatusId: status.id,
+            },
             create: {
               accountId: dir.id,
               candidateId: candidate.id,
@@ -307,6 +327,18 @@ async function main() {
             });
           }
         }
+      }
+
+      const appCount = await regional.application.count({ where: { accountId: dir.id } });
+      const jobCount = await regional.job.count({ where: { accountId: dir.id } });
+      if (jobCount > 0 && appCount === 0) {
+        console.warn(
+          `[seed] ${acc.slug}: ${jobCount} jobs but 0 applications — check pipeline statuses / re-run after fixing jobs`,
+        );
+      } else {
+        console.log(
+          `[seed] ${acc.slug}: ${appCount} application rows (${jobCount} jobs; expect ~10 apps for two seeded jobs × five candidates)`,
+        );
       }
     } finally {
       await regional.$disconnect();
