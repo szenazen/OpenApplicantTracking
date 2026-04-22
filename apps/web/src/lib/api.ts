@@ -531,3 +531,26 @@ export interface JobNote {
     avatarUrl: string | null;
   } | null;
 }
+
+export type NotificationKind = 'MENTION' | 'ASSIGNMENT' | 'REPLY';
+
+export interface NotificationEntry {
+  id: string;
+  kind: NotificationKind;
+  resource: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+  actor: {
+    id: string;
+    displayName: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
+export interface NotificationPage {
+  entries: NotificationEntry[];
+  nextBefore: string | null;
+  unreadCount: number;
+}

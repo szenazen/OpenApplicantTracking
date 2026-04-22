@@ -51,6 +51,7 @@ model Account {
   candidateImports CandidateImport[]
   applicationComments  ApplicationComment[]
   applicationReactions ApplicationReaction[]
+  notifications        Notification[]
 
   @@map("accounts")
 }
@@ -478,6 +479,43 @@ model CandidateImport {
 // -----------------------------------------------------------------------------
 // Regional skill cache (read-only, replicated from global)
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Notifications — per-recipient inbox of @mentions and assignment events.
+//
+// Stored regionally per account/recipient so reads are cheap (the bell
+// polls `unread-count` constantly). The `metadata` blob is intentionally
+// loose (jobId / applicationId / commentId / actorUserId / snippet) so we
+// can add new notification kinds without a migration. `resource` is the
+// canonical deep-link target the UI navigates to on click.
+//
+// Indexes are tuned for the two hot paths:
+//   1. `unread count for (accountId, userId)` (partial-ish via readAt)
+//   2. `latest N for (accountId, userId)` ordered by createdAt
+// -----------------------------------------------------------------------------
+
+enum NotificationKind {
+  MENTION       // someone @-mentioned the recipient in a comment or note
+  ASSIGNMENT    // recipient was added as a JobMember
+  REPLY         // a reply landed on a comment thread the recipient started
+}
+
+model Notification {
+  id              String           @id @default(cuid())
+  accountId       String
+  userId          String                                  // recipient — global user id
+  kind            NotificationKind
+  resource        String                                  // e.g. "application:<id>", "job:<id>"
+  metadata        Json             @default("{}")
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, userId, createdAt])
+  @@index([accountId, userId, readAt])
+  @@map("notifications")
+}
 
 model SkillCache {
   id              String   @id                 // matches global Skill.id

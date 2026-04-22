@@ -6,6 +6,7 @@ import { LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/lib/store';
 import { AccountSwitcher } from './AccountSwitcher';
+import { NotificationsBell } from './NotificationsBell';
 
 const REGION_LABEL: Record<string, string> = {
   'us-east-1': '🇺🇸 US East',
@@ -62,6 +63,7 @@ export function Header() {
       </div>
       <div className="flex items-center gap-4">
         <AccountSwitcher />
+        <NotificationsBell />
         <span className="text-sm text-slate-600">{me?.email}</span>
         <button
           onClick={() => {

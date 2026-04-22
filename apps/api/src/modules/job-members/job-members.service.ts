@@ -8,6 +8,7 @@ import {
 import { JobMemberRole, Prisma } from '.prisma/regional';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export type JobMemberRoleInput = `${JobMemberRole}`;
 
@@ -40,6 +41,7 @@ export class JobMembersService {
   constructor(
     private readonly router: RegionRouterService,
     private readonly global: GlobalPrismaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listForJob(accountId: string, jobId: string) {
@@ -96,6 +98,16 @@ export class JobMembersService {
         });
         return row;
       });
+      // Fire-and-forget assignment notification so the new collaborator
+      // sees the job appear in their bell + "My jobs" without polling.
+      await this.notifications
+        .notify(accountId, input.userId, actorUserId, 'ASSIGNMENT', `job:${jobId}`, {
+          jobId,
+          jobMemberId: created.id,
+          role,
+        })
+        .catch(() => undefined);
+
       const [hydrated] = await this.hydrateUsers([created]);
       return hydrated;
     } catch (e) {

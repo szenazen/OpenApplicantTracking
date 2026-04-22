@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface CreateCommentInput {
   body: string;
@@ -36,6 +37,7 @@ export class CommentsService {
   constructor(
     private readonly router: RegionRouterService,
     private readonly global: GlobalPrismaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Newest-first list of visible comments on an application. */
@@ -94,8 +96,68 @@ export class CommentsService {
       return row;
     });
 
+    // Mention + reply notifications happen out-of-transaction on purpose:
+    // the comment is the source of truth, and a transient regional DB blip
+    // shouldn't roll back a successful comment. Failures are swallowed so
+    // notifications never break the write path.
+    const notified = await this.notifications
+      .notifyMentions({
+        accountId,
+        actorUserId,
+        body,
+        resource: `application:${applicationId}`,
+        metadata: { jobId, applicationId, commentId: created.id, source: 'comment' },
+      })
+      .catch(() => [] as string[]);
+    await this.notifyPriorCommenters({
+      accountId,
+      applicationId,
+      actorUserId,
+      jobId,
+      commentId: created.id,
+      body,
+      excludeUserIds: new Set(notified),
+    }).catch(() => undefined);
+
     const [hydrated] = await this.hydrateAuthors([created]);
     return hydrated;
+  }
+
+  /**
+   * Send a `REPLY` notification to every prior commenter on the same
+   * application except the current actor and anyone we already pinged via
+   * `@mention` — avoids double-buzzing the same user.
+   */
+  private async notifyPriorCommenters(opts: {
+    accountId: string;
+    applicationId: string;
+    actorUserId: string;
+    jobId: string;
+    commentId: string;
+    body: string;
+    excludeUserIds: Set<string>;
+  }) {
+    const { client } = await this.router.forAccount(opts.accountId);
+    const prior = await client.applicationComment.findMany({
+      where: { applicationId: opts.applicationId, accountId: opts.accountId, deletedAt: null },
+      select: { authorUserId: true },
+      distinct: ['authorUserId'],
+    });
+    const recipients = new Set<string>();
+    for (const p of prior) {
+      if (p.authorUserId === opts.actorUserId) continue;
+      if (opts.excludeUserIds.has(p.authorUserId)) continue;
+      recipients.add(p.authorUserId);
+    }
+    for (const userId of recipients) {
+      await this.notifications.notify(opts.accountId, userId, opts.actorUserId, 'REPLY', `application:${opts.applicationId}`, {
+        jobId: opts.jobId,
+        applicationId: opts.applicationId,
+        commentId: opts.commentId,
+        snippet: opts.body.slice(0, 240),
+        source: 'comment',
+      });
+    }
   }
 
   async update(
@@ -144,6 +206,25 @@ export class CommentsService {
       });
       return next;
     });
+
+    // Re-run mention extraction so users newly @-mentioned in an edit get
+    // notified. Naturally idempotent for already-known recipients only if
+    // they read; we accept a small risk of duplicate notifications when an
+    // edit re-mentions someone — we'd rather over-notify than miss a ping.
+    await this.notifications
+      .notifyMentions({
+        accountId,
+        actorUserId,
+        body,
+        resource: `application:${current.applicationId}`,
+        metadata: {
+          jobId: current.application.jobId,
+          applicationId: current.applicationId,
+          commentId,
+          source: 'comment',
+        },
+      })
+      .catch(() => undefined);
 
     const [hydrated] = await this.hydrateAuthors([updated]);
     return hydrated;

@@ -22,6 +22,7 @@ import { SourcingModule } from './modules/sourcing/sourcing.module';
 import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HomeModule } from './modules/home/home.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -48,6 +49,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     RecommendationsModule,
     ReportsModule,
     HomeModule,
+    NotificationsModule,
     RealtimeModule,
   ],
 })

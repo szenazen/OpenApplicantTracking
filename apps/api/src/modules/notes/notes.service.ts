@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface CreateNoteInput {
   body: string;
@@ -34,6 +35,7 @@ export class NotesService {
   constructor(
     private readonly router: RegionRouterService,
     private readonly global: GlobalPrismaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Newest-first list of visible notes on a job, with author display info. */
@@ -95,6 +97,16 @@ export class NotesService {
       return created;
     });
 
+    await this.notifications
+      .notifyMentions({
+        accountId,
+        actorUserId,
+        body,
+        resource: `job:${jobId}`,
+        metadata: { jobId, noteId: note.id, source: 'note' },
+      })
+      .catch(() => undefined);
+
     const [hydrated] = await this.hydrateAuthors([note]);
     return hydrated;
   }
@@ -137,6 +149,16 @@ export class NotesService {
       });
       return next;
     });
+
+    await this.notifications
+      .notifyMentions({
+        accountId,
+        actorUserId,
+        body,
+        resource: `job:${current.jobId}`,
+        metadata: { jobId: current.jobId, noteId, source: 'note' },
+      })
+      .catch(() => undefined);
 
     const [hydrated] = await this.hydrateAuthors([updated]);
     return hydrated;
