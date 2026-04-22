@@ -174,12 +174,14 @@ function ActivityVerb({
     case 'application.moved': {
       const from = typeof m.fromStatusId === 'string' ? statusNames.get(m.fromStatusId) ?? '—' : '—';
       const to = typeof m.toStatusId === 'string' ? statusNames.get(m.toStatusId) ?? '—' : '—';
+      const reason = typeof m.reason === 'string' ? m.reason : '';
       return (
         <>
           moved a candidate{' '}
           <StagePill>{from}</StagePill>
           <ArrowRight size={12} className="mx-1 inline-block text-slate-400" aria-hidden />
-          <StagePill>{to}</StagePill>.
+          <StagePill>{to}</StagePill>
+          {reason && <span className="text-slate-500"> — {reason}</span>}.
         </>
       );
     }

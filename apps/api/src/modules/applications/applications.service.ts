@@ -318,6 +318,7 @@ export class ApplicationsService {
             toStatusId,
             toPosition: toPos,
             version: moved.version,
+            ...(input.reason ? { reason: input.reason } : {}),
           },
         },
       });

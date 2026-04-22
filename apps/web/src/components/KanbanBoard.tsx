@@ -13,6 +13,7 @@ import { Briefcase, Clock, Eye, MessageSquare, MoreVertical, Star, ThumbsDown, T
 import { api, ApplicationCard, Pipeline, PipelineStatus } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { avatarColor, formatRelativeDuration, formatYearsExperience, getInitials } from '@/lib/format';
+import { PendingTransition, StageTransitionDialog } from './StageTransitionDialog';
 
 interface Props {
   jobId: string;
@@ -58,6 +59,9 @@ export function KanbanBoard({
   const { token, activeAccountId } = useAuth();
   const [cards, setCards] = useState<ApplicationCard[]>(initialCards);
   const [error, setError] = useState<string | null>(null);
+  // Set when a drag lands on a HIRED/DROPPED column and we want a
+  // confirmation modal before committing the move (with a reason).
+  const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null);
 
   // Merge external card overrides (e.g. comment / reaction counts from the
   // drawer) into our local list. We only patch when the incoming snapshot
@@ -140,45 +144,83 @@ export function KanbanBoard({
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-    // Capture the version we saw before optimistically mutating local state,
-    // so the server can reject stale moves (409) instead of silently
-    // overwriting someone else's concurrent drag.
     const moving = cards.find((c) => c.id === draggableId);
-    const expectedVersion = moving?.version;
+    const fromStatus = pipeline.statuses.find((s) => s.id === source.droppableId);
+    const toStatus = pipeline.statuses.find((s) => s.id === destination.droppableId);
 
-    // Optimistic update
+    // For terminal categories (HIRED / DROPPED) we want to capture the
+    // recruiter's reason before committing — both for audit and for the
+    // candidate-side timeline. The board snaps back to the source column
+    // until the user confirms in the modal.
+    if (
+      moving &&
+      fromStatus &&
+      toStatus &&
+      source.droppableId !== destination.droppableId &&
+      (toStatus.category === 'HIRED' || toStatus.category === 'DROPPED')
+    ) {
+      setPendingTransition({
+        card: moving,
+        fromStatus,
+        toStatus,
+        toPosition: destination.index,
+      });
+      return;
+    }
+
+    await commitMove({
+      applicationId: draggableId,
+      fromStatusId: source.droppableId,
+      toStatusId: destination.droppableId,
+      toPosition: destination.index,
+      expectedVersion: moving?.version,
+    });
+  }
+
+  /**
+   * Apply a move: optimistic local mutation → API call → rollback-on-error
+   * handled by surface-level error message (the websocket replay will
+   * eventually correct the optimistic state if the API rejected us).
+   */
+  async function commitMove(opts: {
+    applicationId: string;
+    fromStatusId: string;
+    toStatusId: string;
+    toPosition: number;
+    expectedVersion?: number;
+    reason?: string;
+  }) {
     setCards((prev) =>
       reconcileMove(prev, {
-        applicationId: draggableId,
-        fromStatusId: source.droppableId,
-        toStatusId: destination.droppableId,
-        toPosition: destination.index,
+        applicationId: opts.applicationId,
+        fromStatusId: opts.fromStatusId,
+        toStatusId: opts.toStatusId,
+        toPosition: opts.toPosition,
       }),
     );
-
     try {
-      // A per-drag uuid makes the request safe to retry on network errors:
-      // the server dedupes via the `Idempotency-Key` header.
-      const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${draggableId}-${Date.now()}`;
-      await api(`/applications/${draggableId}/move`, {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${opts.applicationId}-${Date.now()}`;
+      await api(`/applications/${opts.applicationId}/move`, {
         method: 'PATCH',
         body: {
-          toStatusId: destination.droppableId,
-          toPosition: destination.index,
-          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+          toStatusId: opts.toStatusId,
+          toPosition: opts.toPosition,
+          ...(opts.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
+          ...(opts.reason ? { reason: opts.reason } : {}),
         },
         headers: { 'Idempotency-Key': idempotencyKey },
       });
     } catch (err: any) {
-      // 409 means someone else moved the card — reload the board so the user
-      // sees the up-to-date state instead of a stale optimistic one.
       if (err?.status === 409) {
         setError('This card was just updated by someone else — reloading to reconcile.');
       } else {
-        setError(err.message ?? 'Move failed — refresh to reconcile');
+        setError(err?.message ?? 'Move failed — refresh to reconcile');
       }
+      // Re-throw so any caller (e.g. the dialog) can surface it inline.
+      throw err;
     }
   }
 
@@ -311,6 +353,24 @@ export function KanbanBoard({
           ))}
         </div>
       </DragDropContext>
+
+      <StageTransitionDialog
+        pending={pendingTransition}
+        onCancel={() => setPendingTransition(null)}
+        onConfirm={async (reason) => {
+          if (!pendingTransition) return;
+          const p = pendingTransition;
+          await commitMove({
+            applicationId: p.card.id,
+            fromStatusId: p.fromStatus.id,
+            toStatusId: p.toStatus.id,
+            toPosition: p.toPosition,
+            expectedVersion: p.card.version,
+            reason,
+          });
+          setPendingTransition(null);
+        }}
+      />
     </div>
   );
 }
