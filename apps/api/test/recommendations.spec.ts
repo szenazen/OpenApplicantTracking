@@ -227,4 +227,50 @@ describe('Recommendations (integration)', () => {
       .set(hdr())
       .expect(404);
   });
+
+  it('returns a multi-signal scorePct and a breakdown per candidate', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/recommendations`)
+      .set(hdr())
+      .expect(200);
+    const [top] = res.body.candidates;
+    expect(top.scorePct).toBeGreaterThan(0);
+    expect(top.scorePct).toBeLessThanOrEqual(100);
+    expect(top.breakdown).toBeDefined();
+    expect(typeof top.breakdown.skillsPct).toBe('number');
+    expect(typeof top.breakdown.freshnessPct).toBe('number');
+    expect(typeof top.breakdown.weights.skills).toBe('number');
+    // 3/3 skill match should translate into a perfect skills sub-score.
+    expect(top.breakdown.skillsPct).toBe(100);
+    // Explanations are populated.
+    expect(Array.isArray(top.reasons)).toBe(true);
+    expect(top.reasons.length).toBeGreaterThan(0);
+  });
+
+  it('filters by the `q` query parameter (name / title / company search)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/recommendations?q=TwoOpen`)
+      .set(hdr())
+      .expect(200);
+    const names = res.body.candidates.map((c: any) => c.candidate.firstName);
+    expect(names).toEqual(['TwoOpen']);
+  });
+
+  it('filters by the `skillIds` intersection param', async () => {
+    // Only "Three" has skillB; "TwoOpen" doesn't.
+    const res = await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/recommendations?skillIds=${skillB.id}`)
+      .set(hdr())
+      .expect(200);
+    const names = res.body.candidates.map((c: any) => c.candidate.firstName);
+    expect(names).toContain('Three');
+    expect(names).not.toContain('TwoOpen');
+  });
+
+  it('rejects minYoe > maxYoe with a 400', async () => {
+    await request(app.getHttpServer())
+      .get(`/jobs/${jobId}/recommendations?minYoe=10&maxYoe=2`)
+      .set(hdr())
+      .expect(400);
+  });
 });

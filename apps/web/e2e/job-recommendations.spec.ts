@@ -29,18 +29,42 @@ test.describe('Job recommendations tab', () => {
     await page.waitForURL(/\/recommendations$/);
     await expect(page.getByTestId('job-recommendations-page')).toBeVisible();
 
+    // The filter sidebar and search bar are always rendered.
+    await expect(page.getByTestId('recommendations-filters')).toBeVisible();
+    await expect(page.getByTestId('recommendations-search')).toBeVisible();
+
     const listOrEmpty = page
       .getByTestId('recommendations-list')
       .or(page.getByTestId('recommendations-empty'));
     await expect(listOrEmpty).toBeVisible();
 
-    // If we do have candidates, the top row must expose the match meter and
-    // an "Add to job" affordance.
+    // If we do have candidates, the top row must expose the multi-signal
+    // match score badge and an "Add to job" affordance.
     const list = page.getByTestId('recommendations-list');
     if (await list.isVisible()) {
       const firstRow = page.getByTestId('recommendation-row').first();
-      await expect(firstRow.getByTestId('match-meter')).toBeVisible();
+      const scoreBadge = firstRow.getByTestId('match-score');
+      await expect(scoreBadge).toBeVisible();
+      // Score is a number between 0 and 100.
+      const pct = await scoreBadge.getAttribute('data-score-pct');
+      expect(pct).not.toBeNull();
+      expect(Number(pct)).toBeGreaterThanOrEqual(0);
+      expect(Number(pct)).toBeLessThanOrEqual(100);
       await expect(firstRow.getByTestId('recommendation-add')).toBeVisible();
     }
+  });
+
+  test('filter panel narrows results by location', async ({ page }) => {
+    await page.getByTestId('tab-recommendations').click();
+    await page.waitForURL(/\/recommendations$/);
+    await expect(page.getByTestId('job-recommendations-page')).toBeVisible();
+
+    // Apply a location filter that shouldn't match anything in the seed.
+    await page.getByTestId('filter-location').fill('somewhereverynonexistentplace');
+    // Debounce + fetch.
+    await expect(page.getByTestId('recommendations-empty')).toBeVisible({ timeout: 5_000 });
+    // The reset button should now be visible and clear the filter.
+    await page.getByTestId('filters-reset').click();
+    await expect(page.getByTestId('filter-location')).toHaveValue('');
   });
 });

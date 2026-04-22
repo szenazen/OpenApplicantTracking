@@ -513,7 +513,26 @@ export interface RecommendedCandidate {
     yearsExperience: number | null;
     updatedAt: string;
   };
+  /** Raw count of required skills this candidate holds. */
   score: number;
+  /** Multi-signal overall match percentage (0-100). Primary display metric. */
+  scorePct: number;
+  breakdown: {
+    skillsPct: number;
+    locationPct: number;
+    titlePct: number;
+    freshnessPct: number;
+    yoePct: number | null;
+    weights: {
+      skills: number;
+      location: number;
+      title: number;
+      freshness: number;
+      yoe: number;
+    };
+  };
+  /** Short human-readable reasons used in the tooltip. */
+  reasons: string[];
   matchedSkills: SkillRef[];
   missingSkills: SkillRef[];
 }
