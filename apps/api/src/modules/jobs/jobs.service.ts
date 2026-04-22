@@ -12,6 +12,8 @@ export interface CreateJobInput {
   description?: string;
   department?: string;
   location?: string;
+  clientName?: string;
+  headCount?: number;
   employmentType?: EmploymentType;
   pipelineId?: string;
   requiredSkillIds?: string[];
@@ -28,10 +30,27 @@ export interface UpdateJobInput {
   description?: string | null;
   department?: string | null;
   location?: string | null;
+  clientName?: string | null;
+  headCount?: number;
   employmentType?: EmploymentType;
   status?: JobStatus;
   requiredSkillIds?: string[];
   pipelineId?: string;
+}
+
+/**
+ * Filter / pagination query shape for `GET /jobs`. All fields are optional;
+ * the list defaults to the first 50 PUBLISHED+DRAFT+ON_HOLD jobs, ordered
+ * newest-first. Pagination is keyset on `(createdAt DESC, id DESC)` — same
+ * approach as the candidates list — so new rows created mid-scroll don't
+ * cause duplicate or skipped entries.
+ */
+export interface ListJobsQuery {
+  q?: string;
+  status?: JobStatus;
+  includeArchived?: boolean;
+  limit?: number;
+  cursor?: string;
 }
 
 @Injectable()
@@ -42,13 +61,129 @@ export class JobsService {
     private readonly members: JobMembersService,
   ) {}
 
-  async list(accountId: string) {
+  /**
+   * Paginated + filtered job list for the `/dashboard/jobs` table view.
+   *
+   * Each item is enriched with:
+   *   - `candidateCounts.{total, active}` — total applications and count
+   *     of non-terminal ones (not HIRED / DROPPED), so the recruiter can
+   *     scan pipeline health at a glance.
+   *   - `pipeline` + `requiredSkills` — same shape the old flat `list`
+   *     returned, so existing detail-page / Kanban callers keep working
+   *     if they read a row from this list.
+   *
+   * `ARCHIVED` jobs are excluded by default — they're cold and would
+   * dominate a paginated view. Pass `includeArchived=true` to include.
+   */
+  async list(accountId: string, query: ListJobsQuery = {}) {
     const { client } = await this.router.forAccount(accountId);
-    return client.job.findMany({
-      where: { accountId },
-      orderBy: { createdAt: 'desc' },
-      include: { pipeline: { include: { statuses: { orderBy: { position: 'asc' } } } } },
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
+    const q = query.q?.trim() ?? '';
+
+    // Decode the keyset cursor — opaque from the client's perspective.
+    let cursorCreatedAt: Date | undefined;
+    let cursorId: string | undefined;
+    if (query.cursor) {
+      try {
+        const raw = Buffer.from(query.cursor, 'base64url').toString('utf8');
+        const [ts, id] = raw.split('_');
+        if (ts && id) {
+          const ms = Number(ts);
+          if (Number.isFinite(ms)) {
+            cursorCreatedAt = new Date(ms);
+            cursorId = id;
+          }
+        }
+      } catch {
+        // Bad cursor → start from the beginning instead of erroring out.
+      }
+    }
+
+    const where: Prisma.JobWhereInput = { accountId };
+    const andClauses: Prisma.JobWhereInput[] = [];
+
+    if (query.status) {
+      where.status = query.status;
+    } else if (!query.includeArchived) {
+      where.status = { not: 'ARCHIVED' };
+    }
+
+    if (q) {
+      andClauses.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { department: { contains: q, mode: 'insensitive' } },
+          { location: { contains: q, mode: 'insensitive' } },
+          { clientName: { contains: q, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (cursorCreatedAt && cursorId) {
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: cursorCreatedAt } },
+          { createdAt: cursorCreatedAt, id: { lt: cursorId } },
+        ],
+      });
+    }
+
+    if (andClauses.length) where.AND = andClauses;
+
+    // Fetch limit+1 to detect whether another page exists without a
+    // separate COUNT query.
+    const rows = await client.job.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        pipeline: { include: { statuses: { orderBy: { position: 'asc' } } } },
+      },
+      take: limit + 1,
     });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    // Pull application counts in a single groupBy keyed by (jobId, category)
+    // so we can derive both "total" and "active" (non-terminal) counts per
+    // job without N+1 queries.
+    const jobIds = page.map((j) => j.id);
+    const counts = jobIds.length
+      ? await client.application.groupBy({
+          by: ['jobId'],
+          where: { accountId, jobId: { in: jobIds } },
+          _count: { _all: true },
+        })
+      : [];
+    const activeCounts = jobIds.length
+      ? await client.application.groupBy({
+          by: ['jobId'],
+          where: {
+            accountId,
+            jobId: { in: jobIds },
+            currentStatus: { category: { notIn: ['HIRED', 'DROPPED'] } },
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const totalByJob = new Map(counts.map((c) => [c.jobId, c._count._all] as const));
+    const activeByJob = new Map(activeCounts.map((c) => [c.jobId, c._count._all] as const));
+
+    const items = page.map((j) => ({
+      ...j,
+      candidateCounts: {
+        total: totalByJob.get(j.id) ?? 0,
+        active: activeByJob.get(j.id) ?? 0,
+      },
+    }));
+
+    const last = page.at(-1);
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(`${last.createdAt.getTime()}_${last.id}`, 'utf8').toString('base64url')
+        : null;
+
+    return { items, nextCursor };
   }
 
   /**
@@ -155,8 +290,18 @@ export class JobsService {
     setIfChanged('description');
     setIfChanged('department');
     setIfChanged('location');
+    setIfChanged('clientName');
     setIfChanged('employmentType');
     setIfChanged('pipelineId');
+
+    if (input.headCount !== undefined) {
+      const next = Math.max(1, Math.round(Number(input.headCount)));
+      if (Number.isFinite(next) && next !== current.headCount) {
+        data.headCount = next;
+        changedFields.push('headCount');
+        diff.headCount = { from: current.headCount, to: next };
+      }
+    }
 
     if (input.requiredSkillIds !== undefined) {
       const before = current.requiredSkillIds;
@@ -226,6 +371,13 @@ export class JobsService {
         description: input.description,
         department: input.department,
         location: input.location,
+        clientName: input.clientName,
+        // Coerce to a sane positive integer — the DB default is 1 when the
+        // field is omitted so the column always has a value.
+        headCount:
+          input.headCount === undefined
+            ? undefined
+            : Math.max(1, Math.round(Number(input.headCount))),
         employmentType: input.employmentType ?? 'FULL_TIME',
         pipelineId,
         requiredSkillIds: input.requiredSkillIds ?? [],

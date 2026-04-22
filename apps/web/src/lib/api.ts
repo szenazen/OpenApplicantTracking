@@ -94,6 +94,8 @@ export interface JobSummary {
   description?: string | null;
   department?: string | null;
   location?: string | null;
+  clientName?: string | null;
+  headCount?: number;
   employmentType?: EmploymentType | string | null;
   status: JobStatus | string;
   pipelineId: string;
@@ -106,6 +108,30 @@ export interface JobSummary {
   requiredSkills?: SkillRef[];
   openedAt?: string | null;
   closedAt?: string | null;
+  createdAt?: string;
+}
+
+/**
+ * Row shape returned by `GET /jobs` (paginated list). Extends `JobSummary`
+ * with the aggregated candidate counts the table needs.
+ */
+export interface JobListItem extends JobSummary {
+  candidateCounts: { total: number; active: number };
+  createdAt: string;
+}
+
+export interface JobListResponse {
+  items: JobListItem[];
+  nextCursor: string | null;
+}
+
+/** Query shape for `GET /jobs`. All fields optional. */
+export interface JobListQuery {
+  q?: string;
+  status?: JobStatus;
+  includeArchived?: boolean;
+  limit?: number;
+  cursor?: string;
 }
 
 /**
@@ -164,6 +190,8 @@ export interface UpdateJobInput {
   description?: string | null;
   department?: string | null;
   location?: string | null;
+  clientName?: string | null;
+  headCount?: number;
   employmentType?: EmploymentType;
   status?: JobStatus;
   requiredSkillIds?: string[];

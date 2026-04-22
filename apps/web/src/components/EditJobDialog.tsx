@@ -52,6 +52,8 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
   const [description, setDescription] = useState(job.description ?? '');
   const [department, setDepartment] = useState(job.department ?? '');
   const [location, setLocation] = useState(job.location ?? '');
+  const [clientName, setClientName] = useState(job.clientName ?? '');
+  const [headCount, setHeadCount] = useState<string>(String(job.headCount ?? 1));
   const [employmentType, setEmploymentType] = useState<EmploymentType>(
     (job.employmentType as EmploymentType) ?? 'FULL_TIME',
   );
@@ -70,6 +72,8 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
     setDescription(job.description ?? '');
     setDepartment(job.department ?? '');
     setLocation(job.location ?? '');
+    setClientName(job.clientName ?? '');
+    setHeadCount(String(job.headCount ?? 1));
     setEmploymentType((job.employmentType as EmploymentType) ?? 'FULL_TIME');
     setStatus((job.status as JobStatus) ?? 'PUBLISHED');
     setSelectedSkills(job.requiredSkills ?? (job.requiredSkillIds ?? []).map((id) => ({ id, name: id })));
@@ -136,6 +140,17 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
     const nextLoc = location.trim() === '' ? null : location.trim();
     const curLoc = job.location ?? null;
     if (nextLoc !== curLoc) patch.location = nextLoc;
+
+    const nextClient = clientName.trim() === '' ? null : clientName.trim();
+    const curClient = job.clientName ?? null;
+    if (nextClient !== curClient) patch.clientName = nextClient;
+
+    // `headCount` is always a positive integer; skip the patch if the input
+    // is empty/invalid so the no-op return below short-circuits cleanly.
+    const parsedHead = Number.parseInt(headCount, 10);
+    if (Number.isInteger(parsedHead) && parsedHead >= 1 && parsedHead !== (job.headCount ?? 1)) {
+      patch.headCount = parsedHead;
+    }
 
     if (employmentType !== job.employmentType) patch.employmentType = employmentType;
     if (status !== job.status) patch.status = status;
@@ -235,6 +250,31 @@ export function EditJobDialog({ job, open, onClose, onSaved }: Props) {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               data-testid="edit-job-location-input"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </Field>
+
+          <Field label="Client">
+            <input
+              type="text"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="e.g. Amazon"
+              data-testid="edit-job-client-input"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </Field>
+
+          <Field label="Head count">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={10_000}
+              step={1}
+              value={headCount}
+              onChange={(e) => setHeadCount(e.target.value)}
+              data-testid="edit-job-headcount-input"
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </Field>

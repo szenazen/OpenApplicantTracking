@@ -14,7 +14,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
-import { api, HomeSummary, JobSummary } from '@/lib/api';
+import { api, HomeSummary, JobListResponse, JobSummary } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { formatRelativeDuration } from '@/lib/format';
 
@@ -29,11 +29,10 @@ import { formatRelativeDuration } from '@/lib/format';
  *   2. "Needs your attention" — jobs with stuck cards
  *   3. Recent activity across the account
  *
- * The full jobs list still lives at the bottom (kept under the same
- * `jobs-list` / `job-row` testids that other e2e specs rely on for
- * navigation). When we add a dedicated `/dashboard/jobs` route we can
- * thin this page out, but for now keeping it discoverable here is the
- * least-disruptive option.
+ * The full requisitions index moved to `/dashboard/jobs`. A compact
+ * "Recent jobs" block stays at the bottom as a quick-jump list — it also
+ * preserves the `jobs-list` / `job-row` testids that many existing e2e
+ * specs rely on for navigation, so we didn't have to touch those tests.
  */
 export default function HomePage() {
   const { activeAccountId } = useAuth();
@@ -49,12 +48,15 @@ export default function HomePage() {
     let cancelled = false;
     Promise.all([
       api<HomeSummary>('/home'),
-      api<{ jobs: JobSummary[] } | JobSummary[]>('/jobs'),
+      // The jobs endpoint now returns `{ items, nextCursor }`. We only
+      // need a short preview on the home page (the full index lives at
+      // /dashboard/jobs) so a hard-capped limit is enough.
+      api<JobListResponse>('/jobs?limit=10'),
     ])
       .then(([h, j]) => {
         if (cancelled) return;
         setHome(h);
-        setJobs(Array.isArray(j) ? j : j.jobs ?? []);
+        setJobs(j.items);
       })
       .catch((e) => {
         if (!cancelled) setErr(e.message ?? 'Failed to load dashboard');
@@ -230,15 +232,24 @@ export default function HomePage() {
         </Panel>
       )}
 
-      {/* ---------------- All jobs (kept for navigation + e2e) ------------- */}
+      {/* ---------------- Recent jobs (quick-jump + e2e compat) ------------ */}
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-800">All jobs</h2>
-          {home && (
-            <span className="text-xs text-slate-500">
-              {home.jobs.byStatus.PUBLISHED ?? 0} published · {home.jobs.total} total
-            </span>
-          )}
+          <h2 className="text-base font-semibold text-slate-800">Recent jobs</h2>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            {home && (
+              <span>
+                {home.jobs.byStatus.PUBLISHED ?? 0} published · {home.jobs.total} total
+              </span>
+            )}
+            <Link
+              href="/dashboard/jobs"
+              className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+              data-testid="home-view-all-jobs"
+            >
+              View all <ArrowRight size={12} />
+            </Link>
+          </div>
         </div>
         {!jobs && !err && <p className="text-sm text-slate-500">Loading…</p>}
         {jobs && jobs.length === 0 && (

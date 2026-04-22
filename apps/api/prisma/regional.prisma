@@ -115,6 +115,14 @@ model Job {
   description     String?
   department      String?
   location        String?
+  // Staffing firms track a distinct "client" (the company the requisition
+  // is for — e.g. Amazon) separately from the recruiting account itself.
+  // Optional so corporate-ATS deployments can simply ignore it.
+  clientName      String?
+  // Number of open headcount on this requisition. Defaults to 1 so existing
+  // rows don't need a backfill and the listing column always has a value
+  // to render.
+  headCount       Int      @default(1)
   employmentType  EmploymentType @default(FULL_TIME)
   status          JobStatus      @default(DRAFT)
   pipelineId      String

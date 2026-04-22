@@ -16,8 +16,17 @@ const REGION_LABEL: Record<string, string> = {
   'ap-southeast-2': '🇦🇺 Sydney',
 };
 
+// Top-level navigation. Previously "Jobs" pointed at `/dashboard` which
+// conflated the recruiter home with the jobs index. Splitting them means
+// the home page is the "what's happening now" dashboard and Jobs is the
+// dedicated requisitions table — same pattern as most modern ATSes.
 const NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
-  { href: '/dashboard', label: 'Jobs', match: (p) => p === '/dashboard' || p.startsWith('/dashboard/jobs') },
+  { href: '/dashboard', label: 'Home', match: (p) => p === '/dashboard' },
+  {
+    href: '/dashboard/jobs',
+    label: 'Jobs',
+    match: (p) => p === '/dashboard/jobs' || p.startsWith('/dashboard/jobs/'),
+  },
   { href: '/dashboard/candidates', label: 'Candidates', match: (p) => p.startsWith('/dashboard/candidates') },
 ];
 
