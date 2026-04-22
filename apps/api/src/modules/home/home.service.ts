@@ -29,6 +29,12 @@ export class HomeService {
   private static readonly RECENT_WINDOW_DAYS = 7;
   /** Window in days after which an in-progress job is flagged as stuck. */
   private static readonly STUCK_THRESHOLD_DAYS = 7;
+  /**
+   * Window for the "My performance" bar chart. 30 days balances signal
+   * density (enough action in the chart) against recency (ancient work
+   * doesn't help today's decisions).
+   */
+  private static readonly PERFORMANCE_WINDOW_DAYS = 30;
 
   constructor(
     private readonly router: RegionRouterService,
@@ -180,6 +186,166 @@ export class HomeService {
         role: roleByJobId.get(j.id) ?? null,
       }));
 
+    // ---- "My performance" bar chart ------------------------------------
+    //
+    // Five metrics, all scoped to the requesting user:
+    //   - created       : candidates this user sourced/imported (audit)
+    //   - ownedActive   : point-in-time count of non-terminal applications
+    //                     on jobs where the user is a JobMember
+    //   - addedToJob    : applications this user attached to a job
+    //   - dropped       : transitions this user made that landed in DROPPED
+    //   - placed        : transitions this user made that landed in HIRED
+    //
+    // The first, third, fourth and fifth are windowed (last 30 days) so
+    // the chart is "activity this month", not lifetime — recruiters track
+    // rolling performance.
+    const perfSince = new Date(
+      now.getTime() - HomeService.PERFORMANCE_WINDOW_DAYS * 86_400_000,
+    );
+    const [createdByMe, addedToJob, placedByMe, droppedByMe] = await Promise.all([
+      client.auditEvent.count({
+        where: {
+          accountId,
+          actorUserId: requesterUserId,
+          action: 'candidate.imported',
+          createdAt: { gte: perfSince },
+        },
+      }),
+      client.auditEvent.count({
+        where: {
+          accountId,
+          actorUserId: requesterUserId,
+          action: 'application.created',
+          createdAt: { gte: perfSince },
+        },
+      }),
+      hiredStatusIds.length
+        ? client.applicationTransition.count({
+            where: {
+              application: { accountId },
+              byUserId: requesterUserId,
+              toStatusId: { in: hiredStatusIds },
+              createdAt: { gte: perfSince },
+            },
+          })
+        : Promise.resolve(0),
+      droppedStatusIds.length
+        ? client.applicationTransition.count({
+            where: {
+              application: { accountId },
+              byUserId: requesterUserId,
+              toStatusId: { in: droppedStatusIds },
+              createdAt: { gte: perfSince },
+            },
+          })
+        : Promise.resolve(0),
+    ]);
+    // "Owned" is a current snapshot of active apps on the user's jobs.
+    // Drop the window filter so the tile reflects what the user is
+    // responsible for *right now*.
+    let ownedActive = 0;
+    if (myJobIds.size > 0) {
+      for (const a of apps) {
+        if (!myJobIds.has(a.jobId)) continue;
+        const cat = statusCategory.get(a.currentStatusId);
+        if (cat && cat !== 'HIRED' && cat !== 'DROPPED') ownedActive += 1;
+      }
+    }
+
+    // ---- "Recent touched" candidates and jobs for this user ------------
+    //
+    // Mines audit events to answer "who/what did I work on most recently?".
+    // We read a slightly bigger window (last 200) so that even a chatty
+    // reaction stream still leaves room for candidate/job signals, then
+    // dedupe by resource id and take the top N of each kind.
+    const myRecentAudit = await client.auditEvent.findMany({
+      where: { accountId, actorUserId: requesterUserId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { resource: true, createdAt: true, metadata: true },
+    });
+    const recentCandidateIds: string[] = [];
+    const recentJobIds: string[] = [];
+    const seenCand = new Set<string>();
+    const seenJob = new Set<string>();
+    for (const row of myRecentAudit) {
+      // resource is formatted "<kind>:<id>" across services.
+      const [kind, id] = (row.resource ?? '').split(':');
+      if (!kind || !id) continue;
+      if (kind === 'candidate' && !seenCand.has(id)) {
+        seenCand.add(id);
+        if (recentCandidateIds.length < 6) recentCandidateIds.push(id);
+      } else if (kind === 'job' && !seenJob.has(id)) {
+        seenJob.add(id);
+        if (recentJobIds.length < 6) recentJobIds.push(id);
+      } else if (kind === 'application') {
+        // application audit events carry the candidate+job ids in metadata
+        const md = (row.metadata as Record<string, unknown>) ?? {};
+        const cid = typeof md.candidateId === 'string' ? md.candidateId : null;
+        const jid = typeof md.jobId === 'string' ? md.jobId : null;
+        if (cid && !seenCand.has(cid)) {
+          seenCand.add(cid);
+          if (recentCandidateIds.length < 6) recentCandidateIds.push(cid);
+        }
+        if (jid && !seenJob.has(jid)) {
+          seenJob.add(jid);
+          if (recentJobIds.length < 6) recentJobIds.push(jid);
+        }
+      }
+      if (recentCandidateIds.length >= 6 && recentJobIds.length >= 6) break;
+    }
+    const [recentCandidatesRaw, recentJobsRaw] = await Promise.all([
+      recentCandidateIds.length
+        ? client.candidate.findMany({
+            where: { accountId, id: { in: recentCandidateIds } },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              headline: true,
+              email: true,
+            },
+          })
+        : Promise.resolve([] as Array<{
+            id: string;
+            firstName: string;
+            lastName: string;
+            headline: string | null;
+            email: string | null;
+          }>),
+      recentJobIds.length
+        ? client.job.findMany({
+            where: { accountId, id: { in: recentJobIds } },
+            select: {
+              id: true,
+              title: true,
+              clientName: true,
+              department: true,
+              status: true,
+            },
+          })
+        : Promise.resolve([] as Array<{
+            id: string;
+            title: string;
+            clientName: string | null;
+            department: string | null;
+            status: string;
+          }>),
+    ]);
+    // Preserve the original recency order from the audit scan.
+    const candById = new Map(recentCandidatesRaw.map((c) => [c.id, c] as const));
+    const jobById = new Map(recentJobsRaw.map((j) => [j.id, j] as const));
+    const recentTouched = {
+      candidates: recentCandidateIds
+        .map((id) => candById.get(id))
+        .filter((x): x is NonNullable<typeof x> => Boolean(x))
+        .slice(0, 4),
+      jobs: recentJobIds
+        .map((id) => jobById.get(id))
+        .filter((x): x is NonNullable<typeof x> => Boolean(x))
+        .slice(0, 4),
+    };
+
     // ---- Recent activity (account-wide, top N) ---------------------------
     const recentRows = await client.auditEvent.findMany({
       where: { accountId },
@@ -210,7 +376,17 @@ export class HomeService {
       window: {
         recentDays: HomeService.RECENT_WINDOW_DAYS,
         stuckThresholdDays: HomeService.STUCK_THRESHOLD_DAYS,
+        performanceDays: HomeService.PERFORMANCE_WINDOW_DAYS,
       },
+      performance: {
+        windowDays: HomeService.PERFORMANCE_WINDOW_DAYS,
+        created: createdByMe,
+        owned: ownedActive,
+        addedToJob,
+        dropped: droppedByMe,
+        placed: placedByMe,
+      },
+      recentTouched,
       jobs: {
         total: jobs.length,
         byStatus: {

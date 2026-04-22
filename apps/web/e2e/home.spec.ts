@@ -43,6 +43,21 @@ test.describe('Recruiter home dashboard', () => {
     await expect(page.getByTestId('home-activity')).toBeVisible();
   });
 
+  test('renders the performance bar chart and the jobs donut', async ({ page }) => {
+    const chart = page.getByTestId('perf-chart');
+    await expect(chart).toBeVisible();
+    // Five bars, one per metric — each is addressable for assertions.
+    for (const key of ['created', 'owned', 'addedToJob', 'dropped', 'placed']) {
+      await expect(page.getByTestId(`perf-bar-${key}`)).toBeVisible();
+    }
+    await expect(page.getByTestId('home-jobs-donut')).toBeVisible();
+    // The donut itself carries an aria-label we can target uniquely
+    // (ignoring the decorative lucide icon in the panel header).
+    await expect(
+      page.getByTestId('home-jobs-donut').getByRole('img', { name: 'Jobs by status' }),
+    ).toBeVisible();
+  });
+
   test('keeps the all-jobs list discoverable for navigation', async ({ page }) => {
     await expect(page.getByTestId('jobs-list')).toBeVisible();
     const rows = page.getByTestId('job-row');

@@ -144,6 +144,7 @@ export interface HomeSummary {
   window: {
     recentDays: number;
     stuckThresholdDays: number;
+    performanceDays: number;
   };
   jobs: {
     total: number;
@@ -156,6 +157,30 @@ export interface HomeSummary {
     droppedCurrent: number;
     hiresInWindow: number;
     dropsInWindow: number;
+  };
+  performance: {
+    windowDays: number;
+    created: number;
+    owned: number;
+    addedToJob: number;
+    dropped: number;
+    placed: number;
+  };
+  recentTouched: {
+    candidates: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      headline?: string | null;
+      email?: string | null;
+    }>;
+    jobs: Array<{
+      id: string;
+      title: string;
+      clientName?: string | null;
+      department?: string | null;
+      status: JobStatus | string;
+    }>;
   };
   attention: Array<{
     id: string;

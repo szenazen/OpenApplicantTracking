@@ -1,20 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ActivitySquare,
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   Briefcase,
   CheckCircle2,
   Clock,
+  PieChart,
   Star,
   ThumbsUp,
   Users,
   XCircle,
 } from 'lucide-react';
-import { api, HomeSummary, JobListResponse, JobSummary } from '@/lib/api';
+import { api, HomeSummary, JobListResponse, JobStatus, JobSummary } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { formatRelativeDuration } from '@/lib/format';
 
@@ -125,6 +127,112 @@ export default function HomePage() {
           testId="stat-drops"
         />
       </section>
+
+      {/* ---------------- Performance + My jobs donut ---------------------- */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Panel
+          title="My performance"
+          subtitle={
+            home
+              ? `Your activity in the last ${home.performance.windowDays} days. Owned is a live snapshot.`
+              : ''
+          }
+          icon={BarChart3}
+          testId="home-performance"
+          className="lg:col-span-2"
+        >
+          {home && <PerformanceBarChart perf={home.performance} />}
+        </Panel>
+        <Panel
+          title="My jobs"
+          subtitle="Distribution by status."
+          icon={PieChart}
+          testId="home-jobs-donut"
+        >
+          {home && <JobsDonut byStatus={home.jobs.byStatus} total={home.jobs.total} />}
+        </Panel>
+      </div>
+
+      {/* ---------------- Recent actions ---------------------------------- */}
+      {home &&
+        (home.recentTouched.candidates.length > 0 || home.recentTouched.jobs.length > 0) && (
+          <Panel
+            title="Recent actions"
+            subtitle="Candidates and jobs you've touched most recently."
+            icon={Clock}
+            testId="home-recent-touched"
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Candidates
+                </h3>
+                {home.recentTouched.candidates.length === 0 ? (
+                  <EmptyHint>No recent candidate activity.</EmptyHint>
+                ) : (
+                  <ul
+                    className="flex flex-wrap gap-2"
+                    data-testid="home-recent-candidates"
+                  >
+                    {home.recentTouched.candidates.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/dashboard/candidates?openCandidate=${c.id}`}
+                          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs hover:border-brand-400"
+                          data-testid="recent-candidate"
+                        >
+                          <Avatar name={`${c.firstName} ${c.lastName}`} />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-800">
+                              {c.firstName} {c.lastName}
+                            </div>
+                            {c.headline && (
+                              <div className="truncate text-[10px] text-slate-500">
+                                {c.headline}
+                              </div>
+                            )}
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Jobs
+                </h3>
+                {home.recentTouched.jobs.length === 0 ? (
+                  <EmptyHint>No recent job activity.</EmptyHint>
+                ) : (
+                  <ul className="flex flex-wrap gap-2" data-testid="home-recent-jobs">
+                    {home.recentTouched.jobs.map((j) => (
+                      <li key={j.id}>
+                        <Link
+                          href={`/dashboard/jobs/${j.id}`}
+                          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs hover:border-brand-400"
+                          data-testid="recent-job"
+                        >
+                          <JobLogo name={j.clientName ?? j.title} />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-800">
+                              {j.title}
+                            </div>
+                            {j.clientName && (
+                              <div className="truncate text-[10px] text-slate-500">
+                                {j.clientName}
+                              </div>
+                            )}
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </Panel>
+        )}
 
       {/* ---------------- Two-column: Attention + Activity ----------------- */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -329,16 +437,18 @@ function Panel({
   icon: Icon,
   children,
   testId,
+  className,
 }: {
   title: string;
   subtitle?: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   children: React.ReactNode;
   testId?: string;
+  className?: string;
 }) {
   return (
     <section
-      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className ?? ''}`}
       data-testid={testId}
     >
       <header className="mb-2 flex items-start gap-2">
@@ -446,4 +556,211 @@ function ActivityVerb({
     default:
       return <span>{action.replace(/[._]/g, ' ')}.</span>;
   }
+}
+
+/**
+ * Minimal SVG bar chart for the "My performance" widget. We deliberately
+ * don't pull in a charting library — five bars is not worth the ~60KB of
+ * recharts and skipping it keeps LCP snappy. The numbers are rendered as
+ * text above each bar so screen readers still get the information.
+ */
+function PerformanceBarChart({
+  perf,
+}: {
+  perf: HomeSummary['performance'];
+}) {
+  const bars: Array<{ key: keyof HomeSummary['performance']; label: string; value: number }> = [
+    { key: 'created', label: 'Created', value: perf.created },
+    { key: 'owned', label: 'Owned', value: perf.owned },
+    { key: 'addedToJob', label: 'Added to a job', value: perf.addedToJob },
+    { key: 'dropped', label: 'Dropped', value: perf.dropped },
+    { key: 'placed', label: 'Placed', value: perf.placed },
+  ];
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  // Round the max up to a "nice" gridline so ticks aren't ugly (e.g. 17 -> 20).
+  const nice = niceCeiling(max);
+  const ticks = [0, Math.round(nice / 4), Math.round(nice / 2), Math.round((nice * 3) / 4), nice];
+  return (
+    <div data-testid="perf-chart">
+      <div className="relative h-52 pl-8 pr-2">
+        {/* y-axis gridlines */}
+        <div className="absolute inset-y-0 left-0 right-2 flex flex-col-reverse justify-between">
+          {ticks.map((t) => (
+            <div key={t} className="flex items-center">
+              <span className="w-7 pr-1 text-right text-[10px] text-slate-400">{t}</span>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+          ))}
+        </div>
+        {/* bars */}
+        <div className="absolute inset-y-0 left-8 right-2 flex items-end gap-4">
+          {bars.map((b) => {
+            const heightPct = (b.value / nice) * 100;
+            return (
+              <div
+                key={b.key}
+                className="flex h-full flex-1 flex-col items-center justify-end"
+                data-testid={`perf-bar-${b.key}`}
+              >
+                <span className="mb-1 text-[11px] font-medium text-slate-600">{b.value}</span>
+                <div
+                  className="w-full max-w-[44px] rounded-t bg-brand-500"
+                  style={{ height: `${Math.max(heightPct, b.value > 0 ? 2 : 0)}%` }}
+                  aria-label={`${b.label}: ${b.value}`}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-4 pl-8 pr-2 text-center text-[11px] text-slate-500">
+        {bars.map((b) => (
+          <div key={b.key} className="flex-1 truncate">
+            {b.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rounds a value up to the next "nice" integer for chart ticks.
+ * Prefers multiples of 2, 5 or 10 of the right magnitude so gridlines
+ * land on readable numbers.
+ */
+function niceCeiling(n: number): number {
+  if (n <= 1) return 1;
+  if (n <= 4) return 4;
+  if (n <= 10) return 10;
+  const pow = Math.pow(10, Math.floor(Math.log10(n)));
+  const candidates = [1, 2, 2.5, 5, 10].map((c) => c * pow);
+  for (const c of candidates) if (c >= n) return c;
+  return candidates[candidates.length - 1] ?? n;
+}
+
+/**
+ * Donut rendering of job distribution by status. We collapse the five
+ * raw statuses into four user-facing buckets (Active / Won / Lost / On
+ * hold) to match how recruiters talk about their book of work.
+ */
+function JobsDonut({
+  byStatus,
+  total,
+}: {
+  byStatus: Record<JobStatus, number>;
+  total: number;
+}) {
+  const slices = useMemo(
+    () => [
+      { key: 'active', label: 'Active', value: byStatus.PUBLISHED ?? 0, color: '#2563eb' },
+      { key: 'won', label: 'Won', value: byStatus.CLOSED ?? 0, color: '#10b981' },
+      { key: 'lost', label: 'Lost', value: byStatus.ARCHIVED ?? 0, color: '#ef4444' },
+      { key: 'onHold', label: 'On hold', value: byStatus.ON_HOLD ?? 0, color: '#f59e0b' },
+      { key: 'draft', label: 'Draft', value: byStatus.DRAFT ?? 0, color: '#94a3b8' },
+    ],
+    [byStatus],
+  );
+  const sum = slices.reduce((acc, s) => acc + s.value, 0);
+  // Single cumulative angle sweep — SVG arcs composed of two points each.
+  // Kept handwritten so we don't have to pull in recharts for a donut.
+  const radius = 54;
+  const cx = 70;
+  const cy = 70;
+  const stroke = 18;
+  let offset = 0;
+  const paths = slices.map((s) => {
+    const pct = sum === 0 ? 0 : s.value / sum;
+    const circumference = 2 * Math.PI * radius;
+    const dash = pct * circumference;
+    const node = (
+      <circle
+        key={s.key}
+        r={radius}
+        cx={cx}
+        cy={cy}
+        fill="transparent"
+        stroke={s.color}
+        strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circumference - dash}`}
+        strokeDashoffset={-offset}
+        transform={`rotate(-90 ${cx} ${cy})`}
+      />
+    );
+    offset += dash;
+    return node;
+  });
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={140} height={140} viewBox="0 0 140 140" role="img" aria-label="Jobs by status">
+        {sum === 0 ? (
+          <circle r={radius} cx={cx} cy={cy} fill="transparent" stroke="#e2e8f0" strokeWidth={stroke} />
+        ) : (
+          paths
+        )}
+        <text
+          x={cx}
+          y={cy - 4}
+          textAnchor="middle"
+          className="fill-slate-900"
+          style={{ fontSize: 18, fontWeight: 600 }}
+        >
+          {total}
+        </text>
+        <text
+          x={cx}
+          y={cy + 14}
+          textAnchor="middle"
+          className="fill-slate-500"
+          style={{ fontSize: 10 }}
+        >
+          jobs
+        </text>
+      </svg>
+      <ul className="space-y-1 text-xs">
+        {slices
+          .filter((s) => s.value > 0)
+          .map((s) => (
+            <li key={s.key} className="flex items-center gap-2">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ background: s.color }}
+              />
+              <span className="text-slate-700">{s.label}</span>
+              <span className="text-slate-400">· {s.value}</span>
+            </li>
+          ))}
+        {sum === 0 && <li className="text-slate-500">No jobs yet.</li>}
+      </ul>
+    </div>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = (name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join('');
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+      aria-hidden
+    >
+      {initials || '?'}
+    </div>
+  );
+}
+
+function JobLogo({ name }: { name: string }) {
+  const letter = (name || '?').trim()[0]?.toUpperCase() ?? '?';
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[11px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-200"
+      aria-hidden
+    >
+      {letter}
+    </div>
+  );
 }

@@ -267,6 +267,31 @@ describe('Home summary (integration)', () => {
     expect(res.body.recentActivity.length).toBeGreaterThan(0);
   });
 
+  it('returns a performance summary for the requester', async () => {
+    const res = await request(app.getHttpServer()).get('/home').set(hdr()).expect(200);
+    expect(res.body.window.performanceDays).toBeGreaterThan(0);
+    expect(res.body.performance).toBeDefined();
+    expect(res.body.performance.windowDays).toBe(res.body.window.performanceDays);
+    // Owner is a member of Job A which has two in-progress apps (stale + fresh).
+    expect(res.body.performance.owned).toBe(2);
+    // Seeded transitions attributed to the owner.
+    expect(res.body.performance.placed).toBeGreaterThanOrEqual(1);
+    expect(res.body.performance.dropped).toBeGreaterThanOrEqual(1);
+    // No candidate.imported / application.created audits in the seed path.
+    expect(res.body.performance.created).toBe(0);
+    expect(res.body.performance.addedToJob).toBe(0);
+  });
+
+  it('returns recent-touched structure (empty is fine for this seed)', async () => {
+    const res = await request(app.getHttpServer()).get('/home').set(hdr()).expect(200);
+    expect(res.body.recentTouched).toBeDefined();
+    expect(Array.isArray(res.body.recentTouched.candidates)).toBe(true);
+    expect(Array.isArray(res.body.recentTouched.jobs)).toBe(true);
+    // The owner did a PATCH on Job B (`job.updated`) — that should surface.
+    const ids = res.body.recentTouched.jobs.map((j: any) => j.id);
+    expect(ids).toContain(jobBId);
+  });
+
   it('rejects requests without an account context', async () => {
     await request(app.getHttpServer())
       .get('/home')
