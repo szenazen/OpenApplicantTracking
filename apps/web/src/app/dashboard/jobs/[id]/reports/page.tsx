@@ -15,6 +15,24 @@ import { useJob } from '../JobContext';
 
 const WINDOW_OPTIONS = [7, 30, 90] as const;
 
+function normalizeReportPayload(res: JobReport): JobReport {
+  const emptyTotals = { applications: 0, hired: 0, dropped: 0, inProgress: 0 };
+  const emptyRates = {
+    hiredOfApplicantsPct: null,
+    droppedOfApplicantsPct: null,
+    inPipelineOfApplicantsPct: null,
+  };
+  return {
+    ...res,
+    funnel: res.funnel ?? [],
+    timeInStage: res.timeInStage ?? [],
+    hiresOverTime: res.hiresOverTime ?? { windowDays: 30, series: [] },
+    totals: res.totals ?? emptyTotals,
+    rates: res.rates ?? emptyRates,
+    stageDropOff: res.stageDropOff ?? [],
+  };
+}
+
 /**
  * "Reports" tab — job-scoped analytics.
  *
@@ -41,7 +59,7 @@ export default function JobReportsPage() {
       setErr(null);
       try {
         const res = await api<JobReport>(`/jobs/${job.id}/reports?days=${days}`);
-        if (!cancelled) setData(res);
+        if (!cancelled) setData(normalizeReportPayload(res));
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? 'Failed to load report');
       } finally {
@@ -70,7 +88,7 @@ export default function JobReportsPage() {
             <button
               type="button"
               onClick={async () => {
-                const csv = await apiText(`/jobs/${job.id}/reports/export?days=${days}`);
+                const csv = await apiText(`/jobs/${job.id}/reports/csv?days=${days}`);
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -205,7 +223,11 @@ function DropOffTable({
 }) {
   const withExits = rows.filter((r) => r.exitTotal > 0);
   if (withExits.length === 0) {
-    return <p className="text-xs text-slate-400">No stage exits recorded yet — move some cards to see drop-off.</p>;
+    return (
+      <p className="text-xs text-slate-400" data-testid="reports-dropoff">
+        No stage exits recorded yet — move some cards to see drop-off.
+      </p>
+    );
   }
   return (
     <div data-testid="reports-dropoff">

@@ -98,7 +98,54 @@ export interface MeResponse {
   id: string;
   email: string;
   displayName: string;
+  /** Platform operator — can create accounts in any region (see Platform settings). */
+  platformAdmin?: boolean;
   accounts: Array<{ id: string; name: string; slug: string; region: string; role: string }>;
+}
+
+export interface PipelineStatusRow {
+  id: string;
+  name: string;
+  position: number;
+  color: string | null;
+  category: string;
+}
+
+export interface PipelineWithStatuses {
+  id: string;
+  accountId: string;
+  name: string;
+  isDefault: boolean;
+  statuses: PipelineStatusRow[];
+}
+
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InvitationCreated {
+  id: string;
+  email: string;
+  expiresAt: string;
+  token: string;
+}
+
+export interface AssignableInviteRolesResponse {
+  roles: Array<{ id: string; name: string; description: string | null }>;
+}
+
+export interface PlatformAccountRow {
+  id: string;
+  name: string;
+  slug: string;
+  region: string;
+  status: string;
+  ownerUserId: string;
+  createdAt: string;
 }
 
 export interface LoginResponse {
@@ -709,6 +756,27 @@ export interface SearchJobHit {
   location: string | null;
 }
 
+/** GET /candidates/:id — shape used by the drawer’s candidate preview mode. */
+export interface CandidateProfileDetail {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  headline?: string | null;
+  location?: string | null;
+  currentCompany?: string | null;
+  currentTitle?: string | null;
+  yearsExperience?: number | null;
+  summary?: string | null;
+  source?: string | null;
+  skills: Array<{
+    skillId: string;
+    level: number | null;
+    skill: { id: string; name: string; slug: string | null; category: string | null };
+  }>;
+}
+
 export interface SearchCandidateHit {
   type: 'candidate';
   id: string;
@@ -717,6 +785,8 @@ export interface SearchCandidateHit {
   email: string | null;
   currentTitle: string | null;
   currentCompany: string | null;
+  /** When set, palette can deep-link straight into CandidateDrawer on /candidates. */
+  mostRecentApplicationId: string | null;
 }
 
 export interface SearchResult {

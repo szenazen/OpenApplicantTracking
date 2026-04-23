@@ -3,12 +3,13 @@
 export const dynamic = 'force-dynamic';
 
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError, LoginResponse, MeResponse } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setToken, setMe, setActiveAccountId } = useAuth();
   const [email, setEmail] = useState('demo@openapplicanttracking.local');
   const [password, setPassword] = useState('demo1234');
@@ -22,10 +23,27 @@ export default function LoginPage() {
     try {
       const login = await api<LoginResponse>('/auth/login', { body: { email, password } });
       setToken(login.accessToken);
-      // Fetch the profile so we know which accounts the user has access to.
-      const me = await api<MeResponse>('/auth/me');
-      setMe(me);
-      if (me.accounts.length > 0) setActiveAccountId(me.accounts[0]!.id);
+      let me = await api<MeResponse>('/auth/me', { withAccount: false });
+      const inviteToken = searchParams.get('invite');
+      if (inviteToken) {
+        try {
+          const accepted = await api<{ accountId: string }>('/auth/accept-invitation', {
+            withAccount: false,
+            body: { token: inviteToken },
+          });
+          me = await api<MeResponse>('/auth/me', { withAccount: false });
+          setMe(me);
+          setActiveAccountId(accepted.accountId);
+        } catch (inviteErr) {
+          setMe(me);
+          if (me.accounts.length > 0) setActiveAccountId(me.accounts[0]!.id);
+          setError(inviteErr instanceof ApiError ? inviteErr.message : 'Could not accept invitation');
+          return;
+        }
+      } else {
+        setMe(me);
+        if (me.accounts.length > 0) setActiveAccountId(me.accounts[0]!.id);
+      }
       router.replace('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);

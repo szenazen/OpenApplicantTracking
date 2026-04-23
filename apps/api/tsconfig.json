@@ -1,6 +1,7 @@
 {
   "extends": "@oat/config/tsconfig.node.json",
   "compilerOptions": {
+    "incremental": false,
     "rootDir": "src",
     "outDir": "dist",
     "baseUrl": ".",

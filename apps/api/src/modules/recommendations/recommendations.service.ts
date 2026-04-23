@@ -74,16 +74,16 @@ export interface RecommendationsQuery {
  *
  * We moved from a single-signal (skill-overlap) ranker to a small,
  * explainable multi-signal scorer so results match what recruiters
- * actually act on (skills + location + title + recency):
+ * actually act on (YoE + skills + location + title + recency):
  *
  *   scorePct = Σ weight_i · signal_i · 100
  *
  * Default weights (Σ = 1):
- *   skills    0.55   — still the dominant signal
- *   location  0.20   — sourcing radius matters a lot in practice
- *   title     0.15   — a simple token-jaccard against the job title
- *   yoe       0.05   — only applied when the candidate reports YoE
- *   freshness 0.05   — nudges fresh profiles ahead of ancient ones
+ *   yoe       0.34   — seniority fit leads the blend (stronger than skill overlap alone)
+ *   skills    0.28   — required-skill coverage (still core, secondary to YoE)
+ *   location  0.18   — sourcing radius
+ *   title     0.15   — token overlap with the job title
+ *   freshness 0.05   — nudges recently updated profiles
  *
  * Tie-breaking keeps the old behaviour: more matched required skills,
  * then fresher updatedAt. The raw `score` field (matched-skill count)
@@ -106,10 +106,10 @@ export interface RecommendationsQuery {
 export class RecommendationsService {
   // Tunable. Kept as instance readonlys so they're trivially swappable in tests.
   static readonly WEIGHTS = {
-    skills: 0.55,
-    location: 0.2,
+    yoe: 0.34,
+    skills: 0.28,
+    location: 0.18,
     title: 0.15,
-    yoe: 0.05,
     freshness: 0.05,
   };
   /** Freshness half-life in days. Beyond this the contribution is tiny. */

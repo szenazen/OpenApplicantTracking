@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, LogOut, Settings2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/lib/store';
 import { AccountSwitcher } from './AccountSwitcher';
@@ -35,6 +36,22 @@ export function Header() {
   const pathname = usePathname() ?? '';
   const { me, activeAccountId, logout } = useAuth();
   const active = me?.accounts.find((a) => a.id === activeAccountId);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  const showAccountSettings = me?.accounts.some((a) => a.role === 'admin' || a.role === 'account_manager');
+  const showPlatform = me?.platformAdmin === true;
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onDocClick(ev: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(ev.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [settingsOpen]);
 
   return (
     <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
@@ -71,6 +88,49 @@ export function Header() {
         )}
       </div>
       <div className="flex items-center gap-4">
+        {(showAccountSettings || showPlatform) && (
+          <div className="relative" ref={settingsRef}>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((o) => !o)}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              aria-expanded={settingsOpen}
+              aria-haspopup="menu"
+              data-testid="settings-menu-trigger"
+            >
+              <Settings2 size={16} className="text-slate-500" />
+              Settings
+              <ChevronDown size={14} className="text-slate-400" />
+            </button>
+            {settingsOpen && (
+              <div
+                className="absolute right-0 z-50 mt-1 min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                role="menu"
+              >
+                {showAccountSettings && (
+                  <Link
+                    href="/dashboard/settings/account"
+                    role="menuitem"
+                    className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    Account settings
+                  </Link>
+                )}
+                {showPlatform && (
+                  <Link
+                    href="/dashboard/settings/platform"
+                    role="menuitem"
+                    className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    Platform admin
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <AccountSwitcher />
         <NotificationsBell />
         <span className="text-sm text-slate-600">{me?.email}</span>

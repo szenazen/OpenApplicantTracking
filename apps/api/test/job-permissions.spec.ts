@@ -62,9 +62,20 @@ describe('Job permissions (integration)', () => {
       .expect(201);
     accountId = acc.body.id;
 
-    const adminRole = await db.role.findUnique({ where: { name: 'admin' } });
+    // Account *recruiter* — not admin — so job-scoped OBSERVER rules apply
+    // (admins bypass job role checks). Role may not exist until seed; upsert for CI.
+    const recruiterRole = await db.role.upsert({
+      where: { name: 'recruiter' },
+      update: {},
+      create: {
+        name: 'recruiter',
+        scope: 'ACCOUNT',
+        isSystem: true,
+        description: 'Manage candidates and applications',
+      },
+    });
     await db.membership.create({
-      data: { userId: observerUserId, accountId, roleId: adminRole!.id, status: 'ACTIVE' },
+      data: { userId: observerUserId, accountId, roleId: recruiterRole.id, status: 'ACTIVE' },
     });
 
     regional = new RegionalPrisma({

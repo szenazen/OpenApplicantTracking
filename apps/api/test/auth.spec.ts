@@ -110,6 +110,7 @@ describe('Auth (integration)', () => {
 
     expect(me.body.email).toBe(primaryEmail);
     expect(me.body.displayName).toBe('Primary User');
+    expect(me.body.platformAdmin).toBe(false);
     expect(Array.isArray(me.body.accounts)).toBe(true);
     // Brand-new user, no accounts yet.
     expect(me.body.accounts).toHaveLength(0);

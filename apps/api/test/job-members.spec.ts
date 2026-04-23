@@ -30,6 +30,7 @@ describe('Job team (JobMember integration)', () => {
   const slug = `team-${suffix}`;
 
   let ownerToken: string;
+  let ownerUserId: string;
   let accountId: string;
   let jobId: string;
   let memberUserId: string;
@@ -55,6 +56,7 @@ describe('Job team (JobMember integration)', () => {
       .send({ email: memberEmail, password, displayName: 'Team Member' })
       .expect(201);
     memberUserId = (await db.user.findUnique({ where: { email: memberEmail } }))!.id;
+    ownerUserId = (await db.user.findUnique({ where: { email: ownerEmail } }))!.id;
 
     await request(app.getHttpServer())
       .post('/auth/register')
@@ -143,8 +145,10 @@ describe('Job team (JobMember integration)', () => {
       .get(`/jobs/${jobId}/members`)
       .set(hdr())
       .expect(200);
-    expect(listRes.body).toHaveLength(1);
-    expect(listRes.body[0].userId).toBe(memberUserId);
+    // Creator is auto-added as OWNER; we added HIRING_MANAGER.
+    expect(listRes.body).toHaveLength(2);
+    const userIds = listRes.body.map((m: { userId: string }) => m.userId).sort();
+    expect(userIds).toEqual([memberUserId, ownerUserId].sort());
 
     // Second add with the same user is a 409 (unique (jobId, userId)).
     await request(app.getHttpServer())
@@ -171,7 +175,8 @@ describe('Job team (JobMember integration)', () => {
       .get(`/jobs/${jobId}/members`)
       .set(hdr())
       .expect(200);
-    expect(emptyList.body).toHaveLength(0);
+    expect(emptyList.body).toHaveLength(1);
+    expect(emptyList.body[0].userId).toBe(ownerUserId);
   });
 
   it('rejects adding a user who is not an active member of the account', async () => {

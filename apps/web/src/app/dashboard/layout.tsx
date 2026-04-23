@@ -2,12 +2,13 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, MeResponse } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { Header } from '@/components/Header';
 import { CommandPalette } from '@/components/CommandPalette';
+import { DashboardCandidateDrawer } from '@/components/DashboardCandidateDrawer';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -44,7 +45,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-full flex-col">
       <Header />
       <main className="flex-1 overflow-auto">{children}</main>
-      <CommandPalette />
+      <Suspense fallback={null}>
+        <CommandPalette />
+        <DashboardCandidateDrawer />
+      </Suspense>
     </div>
   );
 }

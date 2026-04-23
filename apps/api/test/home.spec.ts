@@ -191,15 +191,7 @@ describe('Home summary (integration)', () => {
       },
     });
 
-    // Add the owner as a JobMember on Job A so myJobs picks it up.
-    await regional.jobMember.create({
-      data: {
-        accountId,
-        jobId: jobAId,
-        userId: ownerUserId,
-        role: 'OWNER',
-      },
-    });
+    // Job create already syncs the creator as JobMember OWNER — no extra row.
   });
 
   afterAll(async () => {

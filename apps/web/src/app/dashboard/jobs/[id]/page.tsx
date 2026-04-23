@@ -4,58 +4,56 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { CandidateDrawer } from '@/components/CandidateDrawer';
-import type { ApplicationCard } from '@/lib/api';
+import { api, type ApplicationCard } from '@/lib/api';
 import { useJob } from './JobContext';
 
 /**
  * Default "Candidates" tab for a job — the Kanban board and candidate
  * drawer. Job data is loaded by the parent layout and shared via
  * {@link useJob}; this tab owns:
- *   - the drawer selection state,
- *   - the `?application=<id>` URL sync (so the drawer is a deep-linkable
- *     surface — e.g. an activity feed entry can jump straight into it),
+ *   - `?application=<id>` and `?candidate=<id>` (preview / Cmd+K) as drawer
+ *     selection, deep-linkable from Activities / command palette,
  *   - the Kanban card overrides so drawer-side comment / reaction /
  *     candidate edits update the board badges without a full refetch.
  */
 export default function JobCandidatesPage() {
-  const { job, pipeline, initialApplications, setLiveApplications } = useJob();
+  const { job, pipeline, initialApplications, setLiveApplications, refreshJob } = useJob();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlAppId = searchParams.get('application');
+  const urlCandidateId = searchParams.get('candidate');
+  /** Local selection updates immediately; URL follows via `setUrlAppId` (Next can lag on `useSearchParams`). */
   const [selectedAppId, setSelectedAppId] = useState<string | null>(urlAppId);
   const [cardOverrides, setCardOverrides] = useState<Record<string, Partial<ApplicationCard>>>({});
 
-  // Sync in from the URL: if the caller lands on this page with
-  // `?application=<id>`, open the drawer automatically. This backs the
-  // deep-links emitted by the Activity feed and the global command palette.
   useEffect(() => {
-    if (urlAppId && urlAppId !== selectedAppId) {
-      setSelectedAppId(urlAppId);
-    }
-    if (!urlAppId && selectedAppId) {
-      // URL dropped the param (e.g. browser back button) — mirror that in state.
-      setSelectedAppId(null);
-    }
-    // Intentionally only watches urlAppId so internal state changes aren't
-    // fighting with the URL for ownership.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedAppId(urlAppId);
   }, [urlAppId]);
 
   const setUrlAppId = useCallback(
     (next: string | null) => {
-      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      // Always read the live query string — `useSearchParams()` can lag `window.location`
+      // after `router.replace`, so a stale snapshot makes close() think `application`
+      // is already absent and skip navigation (drawer stuck open).
+      const params = new URLSearchParams(window.location.search);
       if (next) {
         if (params.get('application') === next) return;
         params.set('application', next);
+        params.delete('candidate');
       } else {
-        if (!params.has('application')) return;
+        if (!params.has('application') && !params.has('candidate')) return;
         params.delete('application');
+        params.delete('candidate');
       }
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      const href = qs ? `${pathname}?${qs}` : pathname;
+      router.replace(href, { scroll: false });
+      // Next's soft navigation doesn't always update `window.location` immediately;
+      // keep the address bar in sync so Playwright, deep-links, and `useSearchParams` agree.
+      window.history.replaceState(window.history.state ?? {}, '', href);
     },
-    [pathname, router, searchParams],
+    [pathname, router],
   );
 
   const handleCardsChange = useCallback(
@@ -73,6 +71,16 @@ export default function JobCandidatesPage() {
     setSelectedAppId(null);
     setUrlAppId(null);
   }, [setUrlAppId]);
+
+  const addPreviewCandidateToJob = useCallback(async () => {
+    if (!urlCandidateId) return;
+    await api(`/applications`, {
+      method: 'POST',
+      body: { candidateId: urlCandidateId, jobId: job.id },
+    });
+    await refreshJob();
+    handleCloseDrawer();
+  }, [urlCandidateId, job.id, refreshJob, handleCloseDrawer]);
   const handleActivityChange = useCallback(
     (
       applicationId: string,
@@ -110,7 +118,14 @@ export default function JobCandidatesPage() {
         cardOverrides={cardOverrides}
       />
       <CandidateDrawer
-        applicationId={selectedAppId}
+        applicationId={urlCandidateId ? null : selectedAppId}
+        previewCandidateId={urlCandidateId}
+        previewJobTitle={job.title}
+        previewPrimaryAction={
+          urlCandidateId
+            ? { label: 'Add to job', onClick: () => void addPreviewCandidateToJob() }
+            : null
+        }
         onClose={handleCloseDrawer}
         pipeline={pipeline}
         onActivityChange={handleActivityChange}

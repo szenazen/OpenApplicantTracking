@@ -18,7 +18,8 @@ test.describe('Auth + account switcher', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await page.waitForURL('**/dashboard');
-    await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible();
+    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recruiter home' })).toBeVisible();
 
     // Account switcher should have all 3 Hays accounts.
     const switcher = page.getByTestId('account-switcher');

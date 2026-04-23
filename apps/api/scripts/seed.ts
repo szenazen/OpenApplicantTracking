@@ -4,14 +4,17 @@
  * Creates:
  *   - RBAC: admin + recruiter roles, permissions
  *   - Skills catalog (dozens of engineering skills)
- *   - One global user `demo@openapplicanttracking.local` (password: `demo1234`)
+ *   - Users: `demo@openapplicanttracking.local` + `platform@openapplicanttracking.local`
+ *     (password: `demo1234`; platform user may provision accounts in any region)
  *   - Three accounts:
  *       • Hays US           (us-east-1)
  *       • Hays EU           (eu-west-1)
  *       • Hays Singapore    (ap-southeast-1)
- *   - Each account gets: default pipeline (already from AccountsService), 2 jobs,
- *     5 candidates per job (10 applications per account) on the Kanban, plus four
- *     "pool" candidates (skills only, no applications) for the Recommendations tab.
+ *   - Each account gets: default pipeline, 2 generic engineering jobs +
+ *     "Director of Platform Engineering" (Sylvain Zenatti in Technical Interview),
+ *     5 candidates per generic job (10 applications) on the Kanban, plus eight
+ *     "pool" candidates (skills only, no applications) for Recommendations with
+ *     varied match signals; re-seed updates pool rows and replaces their skills.
  *
  * Replicates `skills` into each regional `skill_cache`.
  *
@@ -85,6 +88,31 @@ async function main() {
     update: {},
     create: { name: 'recruiter', scope: 'ACCOUNT', isSystem: true, description: 'Manage candidates and applications' },
   });
+  await globalDb.role.upsert({
+    where: { name: 'hiring_manager' },
+    update: {},
+    create: {
+      name: 'hiring_manager',
+      scope: 'ACCOUNT',
+      isSystem: true,
+      description: 'Hiring manager — interview and decision workflows',
+    },
+  });
+  await globalDb.role.upsert({
+    where: { name: 'viewer' },
+    update: {},
+    create: { name: 'viewer', scope: 'ACCOUNT', isSystem: true, description: 'Read-only account access' },
+  });
+  await globalDb.role.upsert({
+    where: { name: 'account_manager' },
+    update: {},
+    create: {
+      name: 'account_manager',
+      scope: 'ACCOUNT',
+      isSystem: true,
+      description: 'Manage account pipeline, settings, and invitations (not full admin)',
+    },
+  });
   await globalDb.rolePermission.createMany({
     data: perms.map((p) => ({ roleId: adminRole.id, permissionId: p.id })),
     skipDuplicates: true,
@@ -106,11 +134,25 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await globalDb.user.upsert({
     where: { email },
-    update: {},
+    update: { platformAdmin: false },
     create: {
       email,
       displayName: 'Demo Recruiter',
+      platformAdmin: false,
       credentials: { create: { passwordHash } },
+    },
+  });
+
+  const platformEmail = 'platform@openapplicanttracking.local';
+  const platformHash = await bcrypt.hash(password, 10);
+  await globalDb.user.upsert({
+    where: { email: platformEmail },
+    update: { platformAdmin: true },
+    create: {
+      email: platformEmail,
+      displayName: 'Platform Admin',
+      platformAdmin: true,
+      credentials: { create: { passwordHash: platformHash } },
     },
   });
 
@@ -255,17 +297,32 @@ async function main() {
           continue;
         }
 
-        // Five candidates + spread them across statuses
+        // Five candidates + spread them across statuses — distinct skill bundles +
+        // YoE spread so Recommendations shows varied match % (not everyone sharing
+        // the same three tags).
         const names = [
           ['Alice', 'Nguyen'], ['Bob', 'Martin'], ['Carla', 'Singh'],
           ['Diego', 'Rossi'], ['Elif', 'Yılmaz'],
         ];
+        /** Index into `skills` — TypeScript, React, Node, Python, … */
+        const kanbanSkillSets = [
+          [0, 6, 9],
+          [2, 11, 12],
+          [3, 12, 17],
+          [4, 5, 14],
+          [8, 10, 13],
+        ];
+        const kanbanYoe = [2, 5, 9, 14, 18];
         for (let i = 0; i < names.length; i++) {
           const [fn, ln] = names[i]!;
           const candidateEmail = `${fn.toLowerCase()}.${ln.toLowerCase()}@${acc.slug}.local`;
           const candidate = await regional.candidate.upsert({
             where: { accountId_email: { accountId: dir.id, email: candidateEmail } },
-            update: {},
+            update: {
+              headline: `${jt.dept} candidate`,
+              location: acc.region,
+              yearsExperience: kanbanYoe[i]!,
+            },
             create: {
               accountId: dir.id,
               firstName: fn,
@@ -273,22 +330,19 @@ async function main() {
               email: candidateEmail,
               headline: `${jt.dept} candidate`,
               location: acc.region,
-              yearsExperience: 3 + i,
+              yearsExperience: kanbanYoe[i]!,
               source: 'seed',
             },
           });
-          // Populate CANDIDATE_SKILLS (junction) with a spread of levels so the
-          // drawer has something realistic to render.
-          const candidateSkills = skills.slice(i, i + 3).map((s, idx) => ({
+          const skillIdxs = kanbanSkillSets[i]!;
+          const candidateSkills = skillIdxs.map((skillIdx, idx) => ({
             candidateId: candidate.id,
-            skillId: s.id,
+            skillId: skills[skillIdx]!.id,
             level: ((i + idx) % 5) + 1,
           }));
           if (candidateSkills.length) {
-            await regional.candidateSkill.createMany({
-              data: candidateSkills,
-              skipDuplicates: true,
-            });
+            await regional.candidateSkill.deleteMany({ where: { candidateId: candidate.id } });
+            await regional.candidateSkill.createMany({ data: candidateSkills });
           }
           const status = jobPipeline.statuses[i % jobPipeline.statuses.length]!;
           const pos = await regional.application.count({
@@ -329,38 +383,248 @@ async function main() {
         }
       }
 
-      // Talent pool: strong profiles + skills, no applications — shows up under
-      // Recommendations ("Add to job") while the loops above keep the Kanban busy.
-      const poolNames = [
-        ['Frank', 'Owens'],
-        ['Grace', 'Park'],
-        ['Henry', 'Kovacs'],
-        ['Ivy', 'Chen'],
-      ] as const;
-      for (const [fn, ln] of poolNames) {
-        const candidateEmail = `${fn.toLowerCase()}.${ln.toLowerCase()}.pool@${acc.slug}.local`;
-        const poolCand = await regional.candidate.upsert({
-          where: { accountId_email: { accountId: dir.id, email: candidateEmail } },
-          update: {},
+      // Director of Platform Engineering + Sylvain Zenatti in Technical Interview.
+      const directorTitle = 'Director of Platform Engineering';
+      let directorJob = await regional.job.findFirst({
+        where: { accountId: dir.id, title: directorTitle },
+      });
+      if (!directorJob) {
+        directorJob = await regional.job.create({
+          data: {
+            accountId: dir.id,
+            title: directorTitle,
+            department: 'Engineering',
+            location: acc.region,
+            status: 'PUBLISHED',
+            pipelineId: pipeline.id,
+            openedAt: new Date(),
+            requiredSkillIds: [skills[0]!.id, skills[3]!.id, skills[15]!.id, skills[18]!.id],
+            ownerId: user.id,
+          },
+        });
+      } else if (!directorJob.ownerId) {
+        directorJob = await regional.job.update({
+          where: { id: directorJob.id },
+          data: { ownerId: user.id },
+        });
+      }
+
+      await regional.jobMember.upsert({
+        where: { jobId_userId: { jobId: directorJob.id, userId: user.id } },
+        update: { role: 'OWNER' },
+        create: {
+          accountId: dir.id,
+          jobId: directorJob.id,
+          userId: user.id,
+          role: 'OWNER',
+          createdBy: user.id,
+        },
+      });
+
+      const directorPipeline = await regional.pipeline.findFirst({
+        where: { id: directorJob.pipelineId, accountId: dir.id },
+        include: { statuses: { orderBy: { position: 'asc' } } },
+      });
+      const technicalInterviewStatus = directorPipeline?.statuses.find(
+        (s) => s.name === 'Technical Interview',
+      );
+      if (!technicalInterviewStatus) {
+        console.warn(`[seed] skip Sylvain Zenatti — no "Technical Interview" status on pipeline`);
+      } else {
+        const szEmail = `sylvain.zenatti@${acc.slug}.local`;
+        const sylvain = await regional.candidate.upsert({
+          where: { accountId_email: { accountId: dir.id, email: szEmail } },
+          update: {
+            firstName: 'Sylvain',
+            lastName: 'Zenatti',
+            headline: 'Platform engineering leadership',
+            currentTitle: 'Senior manager of engineering - Platform',
+            location: acc.region,
+            yearsExperience: 14,
+          },
           create: {
             accountId: dir.id,
-            firstName: fn,
-            lastName: ln,
-            email: candidateEmail,
-            headline: 'Senior Software Engineer',
-            currentTitle: 'Software Engineer',
+            firstName: 'Sylvain',
+            lastName: 'Zenatti',
+            email: szEmail,
+            headline: 'Platform engineering leadership',
+            currentTitle: 'Senior manager of engineering - Platform',
             location: acc.region,
-            yearsExperience: 6,
+            yearsExperience: 14,
+            source: 'seed',
+          },
+        });
+        const szSkillIdxs = [0, 3, 9, 15, 16, 17, 18];
+        await regional.candidateSkill.deleteMany({ where: { candidateId: sylvain.id } });
+        await regional.candidateSkill.createMany({
+          data: szSkillIdxs.map((skillIdx, idx) => ({
+            candidateId: sylvain.id,
+            skillId: skills[skillIdx]!.id,
+            level: (idx % 2) + 4,
+          })),
+        });
+        const tiPos = await regional.application.count({
+          where: { jobId: directorJob.id, currentStatusId: technicalInterviewStatus.id },
+        });
+        const szApp = await regional.application.upsert({
+          where: { candidateId_jobId: { candidateId: sylvain.id, jobId: directorJob.id } },
+          update: {
+            accountId: dir.id,
+            currentStatusId: technicalInterviewStatus.id,
+          },
+          create: {
+            accountId: dir.id,
+            candidateId: sylvain.id,
+            jobId: directorJob.id,
+            currentStatusId: technicalInterviewStatus.id,
+            position: tiPos,
+          },
+        });
+        const szExistingCreate = await regional.applicationTransition.findFirst({
+          where: { applicationId: szApp.id, fromStatusId: null },
+          select: { id: true },
+        });
+        if (!szExistingCreate) {
+          await regional.applicationTransition.create({
+            data: {
+              applicationId: szApp.id,
+              fromStatusId: null,
+              toStatusId: technicalInterviewStatus.id,
+              byUserId: user.id,
+            },
+          });
+        }
+      }
+
+      // Talent pool: no applications — Recommendations tab.
+      // Required job skills are the first four catalog entries (TypeScript, JS,
+      // Python, Go). Profiles deliberately vary: full/partial overlap, location
+      // vs job (`acc.region`), title tokens vs job title, and YoE. Re-seeds
+      // refresh candidate rows + replace skills so match % stays visible.
+      const poolProfiles = [
+        {
+          fn: 'Ivy',
+          ln: 'Chen',
+          yoe: 8,
+          headline: 'Polyglot services — TS / Go / Python',
+          title: 'Senior Backend Engineer',
+          location: acc.region,
+          company: 'Northwind Labs',
+          /** All four required skills */
+          skillIdxs: [0, 1, 2, 3],
+        },
+        {
+          fn: 'Frank',
+          ln: 'Owens',
+          yoe: 5,
+          headline: 'APIs & service design',
+          title: 'Backend Engineer',
+          location: acc.region,
+          company: 'Contoso',
+          /** Missing Go — 3/4 required */
+          skillIdxs: [0, 1, 2, 11, 12],
+        },
+        {
+          fn: 'Grace',
+          ln: 'Park',
+          yoe: 12,
+          headline: 'Infra & delivery',
+          title: 'Platform Engineer',
+          location: 'Berlin, Germany',
+          company: 'Fabrikam EU',
+          /** TS + Go only — 2/4 required; location far from job */
+          skillIdxs: [0, 3, 16, 17, 18],
+        },
+        {
+          fn: 'Henry',
+          ln: 'Kovacs',
+          yoe: 1,
+          headline: 'Learning full-stack',
+          title: 'Junior Web Developer',
+          location: acc.region,
+          company: 'Starter Co',
+          /** JavaScript only — 1/4; low YoE */
+          skillIdxs: [1, 6, 13],
+        },
+        {
+          fn: 'Jack',
+          ln: 'Malik',
+          yoe: 10,
+          headline: 'End-to-end product engineer',
+          title: 'Staff Full-Stack Engineer',
+          location: 'Austin, TX',
+          company: 'AdventureWorks',
+          /** All four + React; US city ≠ region string → weak location */
+          skillIdxs: [0, 1, 2, 3, 6],
+        },
+        {
+          fn: 'Kate',
+          ln: 'Liu',
+          yoe: 4,
+          headline: 'Data platforms',
+          title: 'Data Engineer',
+          location: acc.region,
+          company: 'WideWorld',
+          /** Python + Go — 2/4; title tokens differ from backend job */
+          skillIdxs: [2, 3, 12, 15, 19],
+        },
+        {
+          fn: 'Leo',
+          ln: 'Santos',
+          yoe: 18,
+          headline: 'Long-tenured backend lead',
+          title: 'Distinguished Engineer',
+          location: 'San Francisco, CA',
+          company: 'Proseware',
+          /** All four required; SF vs us-east-1 → no location overlap */
+          skillIdxs: [0, 1, 2, 3, 9],
+        },
+        {
+          fn: 'Mia',
+          ln: 'Brown',
+          yoe: 17,
+          headline: 'Leadership & architecture',
+          title: 'Engineering Director',
+          location: 'London, UK',
+          company: 'BlueYonder',
+          /** JS + Python — 2/4; very senior → YoE curve penalizes */
+          skillIdxs: [1, 2, 6, 11],
+        },
+      ] as const;
+      for (const p of poolProfiles) {
+        const candidateEmail = `${p.fn.toLowerCase()}.${p.ln.toLowerCase()}.pool@${acc.slug}.local`;
+        const poolCand = await regional.candidate.upsert({
+          where: { accountId_email: { accountId: dir.id, email: candidateEmail } },
+          update: {
+            firstName: p.fn,
+            lastName: p.ln,
+            headline: p.headline,
+            currentTitle: p.title,
+            currentCompany: p.company,
+            location: p.location,
+            yearsExperience: p.yoe,
+          },
+          create: {
+            accountId: dir.id,
+            firstName: p.fn,
+            lastName: p.ln,
+            email: candidateEmail,
+            headline: p.headline,
+            currentTitle: p.title,
+            currentCompany: p.company,
+            location: p.location,
+            yearsExperience: p.yoe,
             source: 'seed-pool',
           },
         });
-        const poolSkills = skills.slice(0, 6).map((s, idx) => ({
+        const poolSkills = p.skillIdxs.map((skillIdx, idx) => ({
           candidateId: poolCand.id,
-          skillId: s.id,
-          level: (idx % 3) + 3,
+          skillId: skills[skillIdx]!.id,
+          level: (idx % 3) + 2,
         }));
+        await regional.candidateSkill.deleteMany({ where: { candidateId: poolCand.id } });
         if (poolSkills.length) {
-          await regional.candidateSkill.createMany({ data: poolSkills, skipDuplicates: true });
+          await regional.candidateSkill.createMany({ data: poolSkills });
         }
       }
 
@@ -381,8 +645,9 @@ async function main() {
   }
 
   console.log('\n==> Seed complete.');
-  console.log(`\n  Login:  ${email}`);
-  console.log(`  Password: ${password}\n`);
+  console.log(`\n  Demo login:     ${email}`);
+  console.log(`  Platform admin: platform@openapplicanttracking.local`);
+  console.log(`  Password:       ${password}\n`);
 
   await globalDb.$disconnect();
 }

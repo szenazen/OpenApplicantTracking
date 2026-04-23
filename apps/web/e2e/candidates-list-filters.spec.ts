@@ -87,8 +87,11 @@ test.describe('Candidates list — filters + drawer', () => {
     const rows = page.getByTestId('candidate-row');
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
+    // Server filter matches full skill set; the table only renders the first few chips per row.
     for (let i = 0; i < count; i++) {
-      await expect(rows.nth(i).getByText(chipText, { exact: true }).first()).toBeVisible();
+      const raw = await rows.nth(i).getAttribute('data-skill-names');
+      const names = JSON.parse(raw ?? '[]') as string[];
+      expect(names).toContain(chipText);
     }
 
     // Clear-all resets everything including the URL.
@@ -97,7 +100,11 @@ test.describe('Candidates list — filters + drawer', () => {
   });
 
   test('clicking a row opens the candidate drawer and syncs ?application=', async ({ page }) => {
-    const firstRow = page.getByTestId('candidate-row').first();
+    const withApp = page.locator(
+      '[data-testid="candidate-row"][data-most-recent-app-id]:not([data-most-recent-app-id=""])',
+    );
+    await expect(withApp.first()).toBeVisible({ timeout: 15_000 });
+    const firstRow = withApp.first();
     const appId = await firstRow.getAttribute('data-most-recent-app-id');
     expect(appId).toBeTruthy();
     await firstRow.click();

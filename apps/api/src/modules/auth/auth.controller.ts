@@ -16,6 +16,10 @@ class LoginDto {
   @IsString() password!: string;
 }
 
+class AcceptInvitationDto {
+  @IsString() @MinLength(16) token!: string;
+}
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -37,5 +41,13 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.userId);
+  }
+
+  @Post('accept-invitation')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(200)
+  acceptInvitation(@CurrentUser() user: AuthUser, @Body() dto: AcceptInvitationDto) {
+    return this.auth.acceptInvitation(user.userId, user.email, dto.token);
   }
 }

@@ -201,7 +201,7 @@ describe('Reports (integration)', () => {
 
   it('exports CSV', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/jobs/${jobId}/reports/export?days=7`)
+      .get(`/jobs/${jobId}/reports/csv?days=7`)
       .set(hdr())
       .expect(200);
     expect(res.headers['content-type']).toMatch(/text\/csv/);

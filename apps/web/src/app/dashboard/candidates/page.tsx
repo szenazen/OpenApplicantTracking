@@ -25,7 +25,8 @@ import { CandidateDrawer } from '@/components/CandidateDrawer';
  *   - skillIds   : comma-separated (AND semantics — candidate must have ALL)
  *   - hasActive  : "true" / "false"
  *   - minYoe / maxYoe : inclusive bounds on yearsExperience (non-null only)
- *   - application : opens the candidate drawer for that application id
+ *   - application : opens the drawer for that application (full card)
+ *   - candidate   : profile preview for a candidate id (no application yet)
  *
  * Pagination is keyset via an opaque `nextCursor`, with a single "Load more"
  * button — a scrollable table doesn't need infinite scroll and the manual
@@ -47,6 +48,7 @@ export default function CandidatesPage() {
   const urlMinYoe = parseNonNegInt(searchParams.get('minYoe'));
   const urlMaxYoe = parseNonNegInt(searchParams.get('maxYoe'));
   const urlAppId = searchParams.get('application');
+  const urlCandidateId = searchParams.get('candidate');
 
   // The URL is the source of truth for applied filters. `q` has its own
   // debounced local state so typing feels instant without a 200ms flash
@@ -78,6 +80,7 @@ export default function CandidatesPage() {
       minYoe: number | undefined;
       maxYoe: number | undefined;
       application: string | null;
+      candidate: string | null;
     }>) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       for (const [key, value] of Object.entries(patch)) {
@@ -93,8 +96,15 @@ export default function CandidatesPage() {
           if (typeof value === 'number' && Number.isFinite(value)) params.set(key, String(value));
           else params.delete(key);
         } else if (key === 'application') {
-          if (value) params.set('application', value as string);
-          else params.delete('application');
+          if (value) {
+            params.set('application', value as string);
+            params.delete('candidate');
+          } else params.delete('application');
+        } else if (key === 'candidate') {
+          if (value) {
+            params.set('candidate', value as string);
+            params.delete('application');
+          } else params.delete('candidate');
         } else if (key === 'q') {
           const v = value as string;
           if (v && v.trim()) params.set('q', v);
@@ -201,11 +211,18 @@ export default function CandidatesPage() {
   }, [nextCursor, loadingMore, urlQ, urlSkillIds, urlHasActive, urlMinYoe, urlMaxYoe]);
 
   // ------------------- Drawer -------------------
-  const openDrawer = useCallback(
-    (applicationId: string) => updateUrl({ application: applicationId }),
+  const openApplicationDrawer = useCallback(
+    (applicationId: string) => updateUrl({ application: applicationId, candidate: null }),
     [updateUrl],
   );
-  const closeDrawer = useCallback(() => updateUrl({ application: null }), [updateUrl]);
+  const openCandidatePreview = useCallback(
+    (candidateId: string) => updateUrl({ application: null, candidate: candidateId }),
+    [updateUrl],
+  );
+  const closeDrawer = useCallback(
+    () => updateUrl({ application: null, candidate: null }),
+    [updateUrl],
+  );
 
   const hasAnyFilter =
     urlQ.length > 0 ||
@@ -221,6 +238,8 @@ export default function CandidatesPage() {
       hasActive: undefined,
       minYoe: undefined,
       maxYoe: undefined,
+      application: null,
+      candidate: null,
     });
     setQDraft('');
   }, [updateUrl]);
@@ -288,7 +307,12 @@ export default function CandidatesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100" data-testid="candidates-table-body">
               {items.map((c) => (
-                <CandidateRow key={c.id} c={c} onOpen={openDrawer} />
+                <CandidateRow
+                  key={c.id}
+                  c={c}
+                  onOpenApplication={openApplicationDrawer}
+                  onOpenCandidatePreview={openCandidatePreview}
+                />
               ))}
             </tbody>
           </table>
@@ -311,7 +335,16 @@ export default function CandidatesPage() {
         </div>
       )}
 
-      {urlAppId && <CandidateDrawer applicationId={urlAppId} onClose={closeDrawer} />}
+      {urlAppId && (
+        <CandidateDrawer applicationId={urlAppId} onClose={closeDrawer} />
+      )}
+      {!urlAppId && urlCandidateId && (
+        <CandidateDrawer
+          applicationId={null}
+          previewCandidateId={urlCandidateId}
+          onClose={closeDrawer}
+        />
+      )}
     </div>
   );
 }
@@ -637,33 +670,37 @@ function YoeFilter({
   );
 }
 
-function CandidateRow({ c, onOpen }: { c: CandidateListItem; onOpen: (applicationId: string) => void }) {
+function CandidateRow({
+  c,
+  onOpenApplication,
+  onOpenCandidatePreview,
+}: {
+  c: CandidateListItem;
+  onOpenApplication: (applicationId: string) => void;
+  onOpenCandidatePreview: (candidateId: string) => void;
+}) {
   const initials = getInitials(c.firstName, c.lastName);
   const palette = avatarColor(c.id);
   const yoe = formatYearsExperience(c.yearsExperience);
-  const canOpen = !!c.mostRecentApplicationId;
+  const open = () => {
+    if (c.mostRecentApplicationId) onOpenApplication(c.mostRecentApplicationId);
+    else onOpenCandidatePreview(c.id);
+  };
   return (
     <tr
       data-testid="candidate-row"
       data-candidate-id={c.id}
       data-most-recent-app-id={c.mostRecentApplicationId ?? ''}
-      className={
-        'transition ' +
-        (canOpen
-          ? 'cursor-pointer hover:bg-slate-50 focus-within:bg-slate-50'
-          : 'hover:bg-slate-50')
-      }
-      onClick={() => {
-        if (canOpen) onOpen(c.mostRecentApplicationId as string);
-      }}
-      tabIndex={canOpen ? 0 : -1}
-      role={canOpen ? 'button' : undefined}
-      aria-label={canOpen ? `Open drawer for ${c.firstName} ${c.lastName}` : undefined}
+      data-skill-names={JSON.stringify(c.skills.map((s) => s.name))}
+      className="cursor-pointer transition hover:bg-slate-50 focus-within:bg-slate-50"
+      onClick={open}
+      tabIndex={0}
+      role="button"
+      aria-label={`Open details for ${c.firstName} ${c.lastName}`}
       onKeyDown={(e) => {
-        if (!canOpen) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onOpen(c.mostRecentApplicationId as string);
+          open();
         }
       }}
     >
@@ -738,10 +775,10 @@ function CandidateRow({ c, onOpen }: { c: CandidateListItem; onOpen: (applicatio
             {c.applicationCounts.active}
           </span>
           <span className="text-xs text-slate-400">/ {c.applicationCounts.total}</span>
-          {!canOpen && (
+          {c.applicationCounts.total === 0 && (
             <span
               className="ml-2 text-[10px] text-slate-400"
-              title="No applications yet — create one from a job's Kanban board"
+              title="No applications yet — profile opens in preview; add from a job board"
             >
               no apps
             </span>

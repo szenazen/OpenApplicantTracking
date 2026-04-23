@@ -25,6 +25,8 @@ import { HomeModule } from './modules/home/home.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SearchModule } from './modules/search/search.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
+import { PlatformModule } from './modules/platform/platform.module';
 import { JobPermissionsModule } from './common/job-permissions.module';
 
 @Module({
@@ -55,6 +57,8 @@ import { JobPermissionsModule } from './common/job-permissions.module';
     NotificationsModule,
     SearchModule,
     RealtimeModule,
+    InvitationsModule,
+    PlatformModule,
   ],
 })
 export class AppModule {}

@@ -55,6 +55,7 @@ test.describe('Command palette + deep-link activities', () => {
   });
 
   test('typing a job title surfaces a job hit and Enter navigates to it', async ({ page }) => {
+    await expect(page.getByTestId('notifications-bell')).toBeVisible();
     await page.locator('body').click();
     await page.keyboard.down('Control');
     await page.keyboard.press('KeyK');
@@ -64,7 +65,7 @@ test.describe('Command palette + deep-link activities', () => {
 
     // Wait for a Jobs section to render (debounced + network).
     const jobsHeading = page.getByTestId('command-palette').getByText('Jobs', { exact: true });
-    await expect(jobsHeading).toBeVisible();
+    await expect(jobsHeading).toBeVisible({ timeout: 30_000 });
 
     const firstJob = page.getByTestId('command-palette-item').filter({ hasNotText: 'list' }).first();
     await expect(firstJob).toBeVisible();

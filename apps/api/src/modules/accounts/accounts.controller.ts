@@ -1,10 +1,16 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { AccountsService } from './accounts.service';
+import { IsEmail, IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { AccountAdminOrManagerGuard } from '../../common/account-admin-or-manager.guard';
 import { AccountGuard } from '../../common/account.guard';
-import { AccountId, AuthUser, CurrentUser } from '../../common/request-context';
+import {
+  AccountId,
+  AuthUser,
+  CurrentUser,
+  MembershipRoleName,
+} from '../../common/request-context';
+import { AccountsService } from './accounts.service';
 
 const REGIONS = ['us-east-1', 'eu-west-1', 'ap-southeast-1', 'ap-northeast-1', 'ap-southeast-2'] as const;
 
@@ -13,6 +19,11 @@ class CreateAccountDto {
   @Matches(/^[a-z0-9-]{3,40}$/, { message: 'slug must be lowercase alphanumeric/hyphen 3-40 chars' })
   slug!: string;
   @IsIn(REGIONS as unknown as string[]) region!: (typeof REGIONS)[number];
+}
+
+class AddMemberDto {
+  @IsEmail() email!: string;
+  @IsString() @MinLength(2) role!: string;
 }
 
 @ApiTags('accounts')
@@ -27,20 +38,39 @@ export class AccountsController {
     return this.svc.create({ ownerUserId: user.userId, ...dto });
   }
 
-  @Get(':id')
-  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.svc.getForUser(user.userId, id);
-  }
-
   /**
-   * List the active members of the caller's current account. Requires
-   * AccountGuard so it works against `x-account-id` rather than the path
-   * (consistent with every other account-scoped read).
+   * Account settings: list members (any active member can read).
    */
   @ApiHeader({ name: 'x-account-id', required: true })
   @UseGuards(AccountGuard)
   @Get('current/members')
   listMembers(@AccountId() accountId: string) {
     return this.svc.listMembers(accountId);
+  }
+
+  /**
+   * Roles allowed when inviting / adding users (admin vs account manager).
+   */
+  @ApiHeader({ name: 'x-account-id', required: true })
+  @UseGuards(AccountGuard, AccountAdminOrManagerGuard)
+  @Get('current/assignable-invite-roles')
+  assignableInviteRoles(@MembershipRoleName() membershipRole: string) {
+    return this.svc.assignableInviteRoles(membershipRole);
+  }
+
+  @ApiHeader({ name: 'x-account-id', required: true })
+  @UseGuards(AccountGuard, AccountAdminOrManagerGuard)
+  @Post('current/members')
+  addMember(
+    @AccountId() accountId: string,
+    @MembershipRoleName() membershipRole: string,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.svc.addMemberByEmail(accountId, membershipRole, dto.email, dto.role);
+  }
+
+  @Get(':id')
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.svc.getForUser(user.userId, id);
   }
 }

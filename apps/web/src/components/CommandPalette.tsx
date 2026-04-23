@@ -8,7 +8,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase,
   Home,
@@ -20,6 +20,7 @@ import {
 import clsx from 'clsx';
 import { api, type SearchResult } from '@/lib/api';
 import { useAuth } from '@/lib/store';
+import { mergeDrawerIntoSearchParams } from '@/lib/dashboard-drawer-url';
 
 /** Constant pinned commands surfaced before the user types. */
 interface PinnedCommand {
@@ -43,7 +44,7 @@ interface PaletteItem {
 
 const PINNED: PinnedCommand[] = [
   { id: 'home', label: 'Go to home', hint: 'Dashboard', icon: Home, href: '/dashboard' },
-  { id: 'jobs', label: 'Jobs list', hint: 'All jobs', icon: Briefcase, href: '/dashboard' },
+  { id: 'jobs', label: 'Jobs list', hint: 'All jobs', icon: Briefcase, href: '/dashboard/jobs' },
   {
     id: 'candidates',
     label: 'Candidates list',
@@ -61,7 +62,10 @@ const DEBOUNCE_MS = 150;
  * Opens from anywhere inside /dashboard via ⌘K / Ctrl+K. Empty state shows
  * a short pinned-commands list; typing 2+ chars kicks off a debounced
  * /search call that returns up to 5 jobs + 5 candidates. Enter or click
- * navigates to the hit's deep-link destination.
+ * navigates to the hit: jobs open the Kanban root; candidates merge
+ * `?application=` or `?candidate=` into the **current** path so the drawer
+ * opens in place (via {@link DashboardCandidateDrawer} or a page-local
+ * drawer on Candidates / Kanban / Recommendations).
  *
  * Keyboard:
  *   - ArrowUp / ArrowDown move the active row (wraps).
@@ -73,6 +77,8 @@ const DEBOUNCE_MS = 150;
  */
 export function CommandPalette() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { activeAccountId } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -151,6 +157,23 @@ export function CommandPalette() {
     [router, close],
   );
 
+  const openCandidateDrawerFromSearch = useCallback(
+    (c: SearchResult['candidates'][number]) => {
+      close();
+      const merged = mergeDrawerIntoSearchParams(
+        searchParams,
+        c.mostRecentApplicationId
+          ? { application: c.mostRecentApplicationId }
+          : { candidate: c.id },
+      );
+      const qs = merged.toString();
+      const href = qs ? `${pathname}?${qs}` : pathname;
+      router.replace(href, { scroll: false });
+      window.history.replaceState(window.history.state ?? {}, '', href);
+    },
+    [close, pathname, router, searchParams],
+  );
+
   // Flatten pinned + search hits into a single selectable list, keeping
   // section metadata so we can render group headings and still index by
   // a single "activeIdx".
@@ -186,14 +209,11 @@ export function CommandPalette() {
         hint: [c.currentTitle, c.currentCompany, c.email].filter(Boolean).join(' · ') || undefined,
         icon: UserIcon,
         section: 'Candidates',
-        // The candidates list does not yet auto-select a row from the URL —
-        // the hash lets us pass a hint to the listing page (Phase 8 will
-        // consume it) without 404ing on the unknown query param today.
-        onSelect: () => navigateTo(`/dashboard/candidates#${c.id}`),
+        onSelect: () => openCandidateDrawerFromSearch(c),
       });
     }
     return out;
-  }, [results, navigateTo]);
+  }, [results, navigateTo, openCandidateDrawerFromSearch]);
 
   // Keyboard navigation within the list.
   const onKeyDown = useCallback(

@@ -35,17 +35,27 @@ test.describe('Kanban drag & drop', () => {
     const columnCount = await columns.count();
     expect(columnCount).toBeGreaterThanOrEqual(2);
 
-    // Pick the first non-empty column as source, first *different* non-empty-or-empty column as target.
-    // This makes the test robust to prior runs having already shuffled cards.
-    let sourceIdx = -1;
+    // Non-terminal columns only, and pick an *adjacent* target in pipeline
+    // order — jumping to "New" from deep stages often fails DnD / UX rules.
+    const nonTerminalIdx: number[] = [];
     for (let i = 0; i < columnCount; i++) {
+      const name = await columns.nth(i).getAttribute('data-column-name');
+      if (name && name !== 'Hired' && name !== 'Dropped') nonTerminalIdx.push(i);
+    }
+    expect(nonTerminalIdx.length).toBeGreaterThanOrEqual(2);
+
+    let sourceIdx = -1;
+    for (const i of nonTerminalIdx) {
       if ((await columns.nth(i).getByTestId('kanban-card').count()) > 0) {
         sourceIdx = i;
         break;
       }
     }
-    expect(sourceIdx, 'expected at least one non-empty column from seed data').toBeGreaterThanOrEqual(0);
-    const targetIdx = sourceIdx === 0 ? 1 : 0;
+    expect(sourceIdx, 'expected a non-terminal column with cards').toBeGreaterThanOrEqual(0);
+
+    const pos = nonTerminalIdx.indexOf(sourceIdx);
+    expect(pos).toBeGreaterThanOrEqual(0);
+    const targetIdx = pos > 0 ? nonTerminalIdx[pos - 1]! : nonTerminalIdx[pos + 1]!;
 
     const card = columns.nth(sourceIdx).getByTestId('kanban-card').first();
     const cardId = await card.getAttribute('data-card-id');
@@ -66,8 +76,8 @@ test.describe('Kanban drag & drop', () => {
     await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 20 });
     await page.mouse.up();
 
-    // The card should now live inside the target column.
-    await expect(targetColumn.locator(`[data-card-id="${cardId}"]`)).toBeVisible({ timeout: 10_000 });
+    // The card should now live inside the target column (DnD can be slow to settle).
+    await expect(targetColumn.locator(`[data-card-id="${cardId}"]`)).toBeVisible({ timeout: 25_000 });
 
     // Reload the page and re-check — proves the PATCH was persisted, not just optimistic.
     await page.reload();

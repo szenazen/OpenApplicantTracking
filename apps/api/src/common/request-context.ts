@@ -15,6 +15,8 @@ export interface RequestContext {
   accountId?: string;
   /** Region resolved for the active account. */
   region?: string;
+  /** Membership role on the active account (set by AccountGuard). */
+  role?: string;
 }
 
 declare module 'express' {
@@ -44,5 +46,14 @@ export const AccountId = createParamDecorator(
     const req = ctx.switchToHttp().getRequest();
     if (!req.ctx?.accountId) throw new Error('AccountId used without AccountGuard');
     return req.ctx.accountId;
+  },
+);
+
+/** Account membership role name (`admin`, `recruiter`, …). Requires AccountGuard. */
+export const MembershipRoleName = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string => {
+    const req = ctx.switchToHttp().getRequest();
+    if (!req.ctx?.role) throw new Error('MembershipRoleName used without AccountGuard');
+    return req.ctx.role;
   },
 );

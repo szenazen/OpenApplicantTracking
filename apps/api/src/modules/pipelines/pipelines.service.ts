@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 
 @Injectable()
@@ -72,6 +72,31 @@ export class PipelinesService {
         client.pipelineStatus.update({ where: { id }, data: { position: index } }),
       ),
     );
+    return this.get(accountId, pipelineId);
+  }
+
+  /**
+   * Removes a stage when no applications still reference it (move cards first).
+   */
+  async removeStatus(accountId: string, pipelineId: string, statusId: string) {
+    const { client } = await this.router.forAccount(accountId);
+    const status = await client.pipelineStatus.findFirst({
+      where: {
+        id: statusId,
+        pipelineId,
+        pipeline: { id: pipelineId, accountId },
+      },
+    });
+    if (!status) throw new NotFoundException('Pipeline status not found');
+
+    const inUse = await client.application.count({ where: { currentStatusId: statusId } });
+    if (inUse > 0) {
+      throw new BadRequestException(
+        `This stage still has ${inUse} application(s). Move them to another stage before removing it.`,
+      );
+    }
+
+    await client.pipelineStatus.delete({ where: { id: statusId } });
     return this.get(accountId, pipelineId);
   }
 }

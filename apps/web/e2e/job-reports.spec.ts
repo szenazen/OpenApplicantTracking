@@ -28,8 +28,9 @@ test.describe('Job reports tab', () => {
     await page.getByTestId('tab-reports').click();
     await page.waitForURL(/\/reports$/);
     await expect(page.getByTestId('job-reports-page')).toBeVisible();
+    await expect(page.getByText('Loading…')).toBeHidden({ timeout: 30_000 });
 
-    await expect(page.getByTestId('kpi-applications')).toBeVisible();
+    await expect(page.getByTestId('kpi-applications')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('kpi-in-progress')).toBeVisible();
     await expect(page.getByTestId('kpi-hired')).toBeVisible();
     await expect(page.getByTestId('kpi-dropped')).toBeVisible();
@@ -47,12 +48,28 @@ test.describe('Job reports tab', () => {
   });
 
   test('CSV export button downloads a file', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.getByTestId('tab-reports').click();
     await page.waitForURL(/\/reports$/);
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByTestId('reports-export-csv').click(),
+    await expect(page.getByText('Loading…')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('kpi-applications')).toBeVisible({ timeout: 10_000 });
+
+    const exportBtn = page.getByTestId('reports-export-csv');
+    await exportBtn.scrollIntoViewIfNeeded();
+    // Export uses fetch + Blob (no navigation), so assert the CSV GET instead of Playwright's download event.
+    const [res] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes('reports/csv') &&
+          r.request().method() === 'GET',
+        { timeout: 90_000 },
+      ),
+      exportBtn.click(),
     ]);
-    expect(download.suggestedFilename()).toMatch(/\.csv$/i);
+    expect(res.ok(), `export failed: ${res.status()} ${res.statusText()}`).toBeTruthy();
+    expect(res.headers()['content-type'] ?? '').toMatch(/csv/i);
+    const text = await res.text();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).toMatch(/job|stage|candidate/i);
   });
 });

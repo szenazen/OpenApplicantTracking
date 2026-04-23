@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
@@ -35,6 +41,31 @@ export class AuthService {
       },
     });
     return this.issueTokens(user.id, user.email);
+  }
+
+  async acceptInvitation(userId: string, email: string, token: string) {
+    const normalized = email.trim().toLowerCase();
+    const inv = await this.db.invitation.findUnique({
+      where: { token },
+      include: { role: true },
+    });
+    if (!inv || inv.revokedAt || inv.acceptedAt || inv.expiresAt < new Date()) {
+      throw new BadRequestException('Invitation is invalid or expired');
+    }
+    if (inv.email !== normalized) {
+      throw new ForbiddenException('Sign in as the invited email address to accept this invitation');
+    }
+
+    await this.db.membership.upsert({
+      where: { userId_accountId: { userId, accountId: inv.accountId } },
+      update: { status: 'ACTIVE', roleId: inv.roleId },
+      create: { userId, accountId: inv.accountId, roleId: inv.roleId, status: 'ACTIVE' },
+    });
+    await this.db.invitation.update({
+      where: { id: inv.id },
+      data: { acceptedAt: new Date() },
+    });
+    return { ok: true as const, accountId: inv.accountId };
   }
 
   async login(email: string, password: string) {
@@ -76,6 +107,7 @@ export class AuthService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       locale: user.locale,
+      platformAdmin: user.platformAdmin,
       accounts: user.memberships.map((m) => ({
         id: m.account.id,
         name: m.account.name,

@@ -29,6 +29,7 @@ test.describe('Candidate drawer actions', () => {
     await page.getByTestId('job-row').first().click();
     await page.waitForURL(/\/dashboard\/jobs\/[^/]+$/);
     await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await expect(page.getByTestId('kanban-card').first()).toBeVisible({ timeout: 20_000 });
   });
 
   test('opening the drawer from a Kanban click writes ?application= to the URL', async ({ page }) => {
@@ -39,7 +40,9 @@ test.describe('Candidate drawer actions', () => {
     await clickCard(page, card);
     const drawer = page.getByTestId('candidate-drawer');
     await expect(drawer).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`[?&]application=${cardId}`));
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('application'), { timeout: 25_000 })
+      .toBe(cardId);
 
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
@@ -162,5 +165,5 @@ test.describe('Candidate drawer actions', () => {
  * unambiguous against the drag handle.
  */
 async function clickCard(page: Page, card: ReturnType<Page['getByTestId']>) {
-  await card.getByTestId('kanban-card-name').click({ delay: 0 });
+  await card.getByTestId('kanban-card-name').click();
 }

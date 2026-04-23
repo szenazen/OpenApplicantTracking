@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.turbo
+dist
+.next
+**/.next
+coverage
+*.md
+!services/**/README.md
+.env
+.env.*
+!.env.example

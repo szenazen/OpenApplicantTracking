@@ -1,6 +1,15 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type TransitionEvent,
+} from 'react';
+import clsx from 'clsx';
 import {
   ArrowRight,
   Briefcase,
@@ -27,6 +36,7 @@ import {
   ApplicationCard,
   ApplicationComment,
   ApplicationDetail,
+  CandidateProfileDetail,
   Pipeline,
   PipelineStatus,
   ReactionKind,
@@ -55,6 +65,19 @@ interface ActivityPatch {
 interface Props {
   /** Application id whose drawer to render. When null/undefined the drawer is closed. */
   applicationId: string | null;
+  /**
+   * When set (and `applicationId` is null), loads `GET /candidates/:id` — e.g.
+   * Recommendations before the candidate is on the job.
+   */
+  previewCandidateId?: string | null;
+  /** Current job title for the preview banner (optional). */
+  previewJobTitle?: string | null;
+  /** Primary CTA in preview mode (e.g. “Add to job”). */
+  previewPrimaryAction?: {
+    label: string;
+    disabled?: boolean;
+    onClick: () => void | Promise<void>;
+  } | null;
   /** Fired when the drawer should close (Esc, overlay click, X button). */
   onClose: () => void;
   /**
@@ -72,6 +95,30 @@ interface Props {
   onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
 }
 
+function mapProfileToDrawerCandidate(c: CandidateProfileDetail): ApplicationDetail['candidate'] {
+  return {
+    id: c.id,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email ?? null,
+    phone: c.phone ?? null,
+    headline: c.headline ?? null,
+    location: c.location ?? null,
+    currentCompany: c.currentCompany ?? null,
+    currentTitle: c.currentTitle ?? null,
+    yearsExperience: c.yearsExperience ?? null,
+    summary: c.summary ?? null,
+    source: c.source ?? null,
+    skills: c.skills.map((s) => ({
+      skillId: s.skillId,
+      name: s.skill.name,
+      category: s.skill.category,
+      slug: s.skill.slug,
+      level: s.level,
+    })),
+  };
+}
+
 /**
  * Right-hand drawer that shows a candidate's full profile for the currently
  * selected application. Data comes from `GET /applications/:id` so we get:
@@ -87,20 +134,80 @@ interface Props {
  *   - Quick actions           → copy email / phone to clipboard for fast
  *                               outreach without leaving the drawer.
  */
-export function CandidateDrawer({ applicationId, onClose, pipeline, onActivityChange }: Props) {
+export function CandidateDrawer({
+  applicationId,
+  previewCandidateId = null,
+  previewJobTitle = null,
+  previewPrimaryAction = null,
+  onClose,
+  pipeline,
+  onActivityChange,
+}: Props) {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
+  const [previewCandidate, setPreviewCandidate] = useState<ApplicationDetail['candidate'] | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
   const refresh = useCallback(() => setRefreshToken((v) => v + 1), []);
 
+  const drawerOpen = Boolean(applicationId) || Boolean(previewCandidateId);
+
+  /** Slide-in / slide-out chrome (panel stays mounted while closing animation runs). */
+  const [slideIn, setSlideIn] = useState(false);
+  const [slideOut, setSlideOut] = useState(false);
+  const closingRef = useRef(false);
+
+  useEffect(() => {
+    if (!drawerOpen) {
+      closingRef.current = false;
+      setSlideIn(false);
+      setSlideOut(false);
+      return;
+    }
+    closingRef.current = false;
+    setSlideOut(false);
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setSlideIn(true);
+      return;
+    }
+    setSlideIn(false);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSlideIn(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [drawerOpen, applicationId, previewCandidateId]);
+
+  const requestClose = useCallback(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      closingRef.current = false;
+      onClose();
+      return;
+    }
+    closingRef.current = true;
+    setSlideOut(true);
+    setSlideIn(false);
+  }, [onClose]);
+
+  const onAsideTransitionEnd = useCallback(
+    (e: TransitionEvent<HTMLAsideElement>) => {
+      if (e.propertyName !== 'transform') return;
+      if (closingRef.current) {
+        closingRef.current = false;
+        onClose();
+        setSlideOut(false);
+      }
+    },
+    [onClose],
+  );
+
   // Fetch whenever the selected application changes, or an explicit
   // refresh is requested (e.g. after a 409 reconcile).
   useEffect(() => {
     if (!applicationId) {
       setDetail(null);
-      setError(null);
       return;
     }
     let cancelled = false;
@@ -123,17 +230,45 @@ export function CandidateDrawer({ applicationId, onClose, pipeline, onActivityCh
     };
   }, [applicationId, refreshToken]);
 
+  useEffect(() => {
+    if (!previewCandidateId || applicationId) {
+      setPreviewCandidate(null);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    api<CandidateProfileDetail>(`/candidates/${previewCandidateId}`)
+      .then((c) => {
+        if (cancelled) return;
+        setPreviewCandidate(mapProfileToDrawerCandidate(c));
+      })
+      .catch((e: ApiError) => {
+        if (cancelled) return;
+        setError(e.message ?? 'Failed to load candidate');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewCandidateId, applicationId, refreshToken]);
+
   // Close on Escape when open.
   useEffect(() => {
-    if (!applicationId) return;
+    if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [applicationId, onClose]);
+  }, [drawerOpen, requestClose]);
 
-  if (!applicationId) return null;
+  if (!drawerOpen) return null;
+
+  const panelOpen = slideIn && !slideOut;
 
   return (
     <div
@@ -146,18 +281,27 @@ export function CandidateDrawer({ applicationId, onClose, pipeline, onActivityCh
       <button
         type="button"
         aria-label="Close drawer"
-        className="flex-1 bg-slate-900/30"
+        className={clsx(
+          'flex-1 bg-slate-900/30 transition-opacity duration-300 ease-out motion-reduce:transition-none',
+          panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
         data-testid="drawer-overlay"
-        onClick={onClose}
+        onClick={requestClose}
       />
-      <aside className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
+      <aside
+        className={clsx(
+          'flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-out motion-reduce:transition-none',
+          panelOpen ? 'translate-x-0' : 'translate-x-full',
+        )}
+        onTransitionEnd={onAsideTransitionEnd}
+      >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-slate-700">Candidate</h2>
           <button
             type="button"
             aria-label="Close"
             data-testid="drawer-close"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
           >
             <X size={16} />
@@ -170,7 +314,7 @@ export function CandidateDrawer({ applicationId, onClose, pipeline, onActivityCh
             {error}
           </p>
         )}
-        {detail && (
+        {applicationId && detail && (
           <DrawerBody
             detail={detail}
             pipeline={pipeline}
@@ -183,8 +327,86 @@ export function CandidateDrawer({ applicationId, onClose, pipeline, onActivityCh
             onRefresh={refresh}
           />
         )}
+        {previewCandidateId && previewCandidate && !applicationId && (
+          <PreviewDrawerBody
+            candidate={previewCandidate}
+            jobTitle={previewJobTitle ?? null}
+            primaryAction={previewPrimaryAction ?? null}
+            onCandidateUpdated={(patch) =>
+              setPreviewCandidate((prev) => (prev ? { ...prev, ...patch } : prev))
+            }
+          />
+        )}
       </aside>
     </div>
+  );
+}
+
+function PreviewDrawerBody({
+  candidate,
+  jobTitle,
+  primaryAction,
+  onCandidateUpdated,
+}: {
+  candidate: ApplicationDetail['candidate'];
+  jobTitle: string | null;
+  primaryAction: Props['previewPrimaryAction'];
+  onCandidateUpdated: (patch: Partial<ApplicationDetail['candidate']>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-5 p-4">
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">
+        Preview — not on <span className="font-medium">{jobTitle ?? 'this job'}</span> yet. Add them
+        below or from the list.
+      </p>
+      <IdentitySection
+        candidate={candidate}
+        onSaved={(patch) => {
+          onCandidateUpdated(patch);
+        }}
+      />
+      <ContactSection candidate={candidate} />
+      <DrawerSkills skills={candidate.skills} />
+      {primaryAction && (
+        <button
+          type="button"
+          disabled={primaryAction.disabled}
+          onClick={() => void primaryAction.onClick()}
+          className="inline-flex items-center justify-center gap-1 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
+          data-testid="drawer-preview-primary"
+        >
+          {primaryAction.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DrawerSkills({
+  skills,
+}: {
+  skills: ApplicationDetail['candidate']['skills'] | undefined;
+}) {
+  if (!skills?.length) return null;
+  return (
+    <section data-testid="drawer-skills">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Skills
+      </h4>
+      <ul className="flex flex-wrap gap-1.5">
+        {skills.map((s) => (
+          <li
+            key={s.skillId}
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+            title={s.level ? `Proficiency: ${s.level}/5` : undefined}
+            data-testid="drawer-skill-chip"
+          >
+            <span className="truncate">{s.name}</span>
+            {s.level != null && <SkillLevelDots level={s.level} />}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -282,26 +504,7 @@ function DrawerBody({
         onSaved={(summary) => onLocalCandidateUpdate({ summary })}
       />
 
-      {/* Skills — renders CANDIDATE_SKILLS from the design (name + optional
-          1..5 proficiency dots). */}
-      {candidate.skills && candidate.skills.length > 0 && (
-        <section data-testid="drawer-skills">
-          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Skills</h4>
-          <ul className="flex flex-wrap gap-1.5">
-            {candidate.skills.map((s) => (
-              <li
-                key={s.skillId}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
-                title={s.level ? `Proficiency: ${s.level}/5` : undefined}
-                data-testid="drawer-skill-chip"
-              >
-                <span className="truncate">{s.name}</span>
-                {s.level != null && <SkillLevelDots level={s.level} />}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <DrawerSkills skills={candidate.skills} />
 
       {/* Reactions bar + comments — HR + hiring manager collaboration. */}
       <ReactionsBar
@@ -510,7 +713,12 @@ function CandidateEditForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-2" data-testid="drawer-identity-form">
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="space-y-2"
+      data-testid="drawer-identity-form"
+    >
       <div className="grid grid-cols-2 gap-2">
         <TextField
           label="First name"

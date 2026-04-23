@@ -40,7 +40,7 @@ test.describe('Job team tab', () => {
       .getByTestId('team-member')
       .filter({ hasText: 'demo@openapplicanttracking' });
     if ((await existingOnDemo.count()) > 0) {
-      page.on('dialog', (d) => d.accept());
+      page.once('dialog', (d) => d.accept());
       await existingOnDemo.first().getByTestId('team-member-remove').click();
       await expect(existingOnDemo).toHaveCount(0);
     }
@@ -67,7 +67,7 @@ test.describe('Job team tab', () => {
     await expect(chips).toContainText(`${countBefore + 1} on team`);
 
     // Cleanup — remove the just-added member so subsequent runs start clean.
-    page.on('dialog', (d) => d.accept());
+    page.once('dialog', (d) => d.accept());
     const lastMember = page.getByTestId('team-member').last();
     await lastMember.getByTestId('team-member-remove').click();
     await expect(page.getByTestId('team-member')).toHaveCount(countBefore);

@@ -77,6 +77,12 @@ test.describe('Job detail tabs (shell + Summary)', () => {
     await page.waitForURL(/\/dashboard\/jobs\/[^/]+$/);
     await expect(page.getByTestId('kanban-board')).toBeVisible();
   });
+
+  test('"back to jobs" header link opens /dashboard/jobs (not home)', async ({ page }) => {
+    await page.getByRole('link', { name: /back to jobs/i }).click();
+    await page.waitForURL(/\/dashboard\/jobs$/);
+    await expect(page.getByTestId('jobs-page')).toBeVisible();
+  });
 });
 
 async function readCount(page: import('@playwright/test').Page, testId: string): Promise<number> {

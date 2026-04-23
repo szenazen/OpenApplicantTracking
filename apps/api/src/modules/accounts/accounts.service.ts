@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { GlobalPrismaService } from '../../infrastructure/prisma/global-prisma.service';
 import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
 
@@ -144,5 +150,58 @@ export class AccountsService {
       role: m.role.name,
       status: m.status,
     }));
+  }
+
+  /**
+   * Roles the caller may assign when inviting or adding someone to the account.
+   * Account managers cannot grant `admin`.
+   */
+  async assignableInviteRoles(actorMembershipRole: string) {
+    const names =
+      actorMembershipRole === 'account_manager'
+        ? ['viewer', 'hiring_manager', 'recruiter', 'account_manager']
+        : ['viewer', 'hiring_manager', 'recruiter', 'account_manager', 'admin'];
+    const rows = await this.globalDb.role.findMany({
+      where: { name: { in: names }, scope: 'ACCOUNT' },
+      select: { id: true, name: true, description: true },
+      orderBy: { name: 'asc' },
+    });
+    return { roles: rows };
+  }
+
+  /**
+   * Adds an existing registered user to the account (immediate membership).
+   */
+  async addMemberByEmail(accountId: string, actorMembershipRole: string, email: string, roleName: string) {
+    if (actorMembershipRole === 'account_manager' && roleName === 'admin') {
+      throw new ForbiddenException('Account managers cannot assign the admin role');
+    }
+
+    const normalized = email.trim().toLowerCase();
+    const target = await this.globalDb.user.findUnique({ where: { email: normalized } });
+    if (!target) throw new NotFoundException('No registered user with that email');
+
+    const role = await this.globalDb.role.findUnique({ where: { name: roleName } });
+    if (!role || role.scope !== 'ACCOUNT') throw new BadRequestException('Invalid role');
+
+    const existing = await this.globalDb.membership.findUnique({
+      where: { userId_accountId: { userId: target.id, accountId } },
+    });
+    if (existing?.status === 'ACTIVE') {
+      throw new ConflictException('That user is already an active member of this account');
+    }
+
+    if (existing) {
+      await this.globalDb.membership.update({
+        where: { userId_accountId: { userId: target.id, accountId } },
+        data: { status: 'ACTIVE', roleId: role.id },
+      });
+    } else {
+      await this.globalDb.membership.create({
+        data: { userId: target.id, accountId, roleId: role.id, status: 'ACTIVE' },
+      });
+    }
+
+    return { ok: true as const, userId: target.id, role: roleName };
   }
 }

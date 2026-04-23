@@ -19,7 +19,11 @@ class JobReportQuery {
 export class ReportsController {
   constructor(private readonly svc: ReportsService) {}
 
-  @Get('export')
+  /**
+   * CSV download. Path is `csv` (not `export`) — some HTTP stacks treat the
+   * literal segment `export` oddly; `csv` is unambiguous.
+   */
+  @Get('csv')
   async exportCsv(
     @AccountId() accountId: string,
     @Param('jobId') jobId: string,

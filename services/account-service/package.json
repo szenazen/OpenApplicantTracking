@@ -1,0 +1,44 @@
+{
+  "name": "@oat/account-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Account & membership microservice (global DB only) — strangler extract from @oat/api.",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "prebuild": "pnpm run db:generate",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "dev": "DOTENV_CONFIG_PATH=../../.env nest start --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist src/generated .turbo"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.4",
+    "@nestjs/config": "^3.2.3",
+    "@nestjs/core": "^10.4.4",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/platform-express": "^10.4.4",
+    "@prisma/client": "^5.20.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "helmet": "^8.0.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.5",
+    "@oat/config": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.16.10",
+    "@types/passport-jwt": "^4.0.1",
+    "dotenv": "^16",
+    "prisma": "^5.20.0",
+    "typescript": "^5.5.4"
+  }
+}

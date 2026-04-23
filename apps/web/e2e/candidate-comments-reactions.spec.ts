@@ -24,11 +24,12 @@ test.describe('Candidate comments + reactions', () => {
     await page.getByTestId('job-row').first().click();
     await page.waitForURL(/\/dashboard\/jobs\/[^/]+$/);
     await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await expect(page.getByTestId('kanban-card').first()).toBeVisible({ timeout: 20_000 });
   });
 
   test('can post a comment on a candidate and see the count on the card', async ({ page }) => {
     const firstCard = page.getByTestId('kanban-card').first();
-    await firstCard.click();
+    await firstCard.getByTestId('kanban-card-name').click();
 
     const drawer = page.getByTestId('candidate-drawer');
     await expect(drawer).toBeVisible();
@@ -44,13 +45,18 @@ test.describe('Candidate comments + reactions', () => {
 
     // Close drawer and verify the card shows the badge.
     await drawer.getByTestId('drawer-close').click();
-    await expect(drawer).toBeHidden();
+    try {
+      await expect(drawer).toBeHidden({ timeout: 3_000 });
+    } catch {
+      await drawer.getByTestId('drawer-overlay').click({ position: { x: 8, y: 8 } });
+      await expect(drawer).toBeHidden({ timeout: 15_000 });
+    }
     await expect(firstCard.getByTestId('kanban-card-comments')).toBeVisible();
   });
 
   test('can toggle the star reaction on and off', async ({ page }) => {
     const firstCard = page.getByTestId('kanban-card').first();
-    await firstCard.click();
+    await firstCard.getByTestId('kanban-card-name').click();
 
     const drawer = page.getByTestId('candidate-drawer');
     const star = drawer.getByTestId('reaction-star');

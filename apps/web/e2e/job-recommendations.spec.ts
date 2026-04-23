@@ -54,6 +54,21 @@ test.describe('Job recommendations tab', () => {
     }
   });
 
+  test('clicking a recommendation row opens the candidate drawer', async ({ page }) => {
+    await page.getByTestId('tab-recommendations').click();
+    await page.waitForURL(/\/recommendations$/);
+    const list = page.getByTestId('recommendations-list');
+    const hasList = await list.isVisible().catch(() => false);
+    test.skip(!hasList, 'No recommendation rows for this job in the current seed');
+    const firstRow = page.getByTestId('recommendation-row').first();
+    await firstRow.click();
+    const drawer = page.getByTestId('candidate-drawer');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId('drawer-preview-primary')).toBeVisible();
+    await drawer.getByTestId('drawer-close').click();
+    await expect(drawer).toBeHidden();
+  });
+
   test('filter panel narrows results by location', async ({ page }) => {
     await page.getByTestId('tab-recommendations').click();
     await page.waitForURL(/\/recommendations$/);

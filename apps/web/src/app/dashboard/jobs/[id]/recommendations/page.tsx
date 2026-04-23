@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase,
   Check,
@@ -18,6 +19,7 @@ import {
   type RecommendedCandidate,
   type SkillRef,
 } from '@/lib/api';
+import { CandidateDrawer } from '@/components/CandidateDrawer';
 import { useJob } from '../JobContext';
 
 type AddState =
@@ -35,13 +37,19 @@ type AddState =
  *   +-------------------+-------------------------------------+
  *
  * The score shown on each card is the `scorePct` computed by the API
- * from skill overlap (primary), location match, title similarity,
- * freshness and YoE fit. A tooltip exposes the per-signal breakdown
+ * from YoE fit, required-skill coverage, location, title similarity and
+ * freshness (weights favor experience over raw skill overlap). A tooltip exposes the per-signal breakdown
  * and the reasons the API returned, so recruiters understand *why*
  * a candidate ranks where they do (explainable > black-box).
  */
 export default function JobRecommendationsPage() {
-  const { job, refreshJob } = useJob();
+  const { job, pipeline, refreshJob } = useJob();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlAppId = searchParams.get('application');
+  const urlCandidateId = searchParams.get('candidate');
+
   const [data, setData] = useState<RecommendationsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,12 +108,12 @@ export default function JobRecommendationsPage() {
     };
   }, [job.id, queryString]);
 
-  async function addCandidate(cand: RecommendedCandidate) {
-    setRowState((s) => ({ ...s, [cand.candidate.id]: { status: 'adding' } }));
+  async function addCandidateById(candidateId: string) {
+    setRowState((s) => ({ ...s, [candidateId]: { status: 'adding' } }));
     try {
       await api(`/applications`, {
         method: 'POST',
-        body: { candidateId: cand.candidate.id, jobId: job.id },
+        body: { candidateId, jobId: job.id },
       });
       await refreshJob();
       try {
@@ -116,12 +124,40 @@ export default function JobRecommendationsPage() {
       } catch {
         /* list may be stale until next tab visit */
       }
-      setRowState((s) => ({ ...s, [cand.candidate.id]: { status: 'added' } }));
+      setRowState((s) => ({ ...s, [candidateId]: { status: 'added' } }));
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message ?? 'Failed to add';
-      setRowState((s) => ({ ...s, [cand.candidate.id]: { status: 'error', message: msg } }));
+      setRowState((s) => ({ ...s, [candidateId]: { status: 'error', message: msg } }));
     }
   }
+
+  function addCandidate(cand: RecommendedCandidate) {
+    return addCandidateById(cand.candidate.id);
+  }
+
+  const closeDrawerUrl = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('application') && !params.has('candidate')) return;
+    params.delete('application');
+    params.delete('candidate');
+    const qs = params.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(href, { scroll: false });
+    window.history.replaceState(window.history.state ?? {}, '', href);
+  }, [pathname, router]);
+
+  const openRecommendationPreview = useCallback(
+    (rec: RecommendedCandidate) => {
+      const params = new URLSearchParams(window.location.search);
+      params.set('candidate', rec.candidate.id);
+      params.delete('application');
+      const qs = params.toString();
+      const href = qs ? `${pathname}?${qs}` : pathname;
+      router.replace(href, { scroll: false });
+      window.history.replaceState(window.history.state ?? {}, '', href);
+    },
+    [pathname, router],
+  );
 
   function toggleSkill(id: string) {
     setSkillIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -146,8 +182,8 @@ export default function JobRecommendationsPage() {
           <Sparkles size={14} className="text-brand-600" /> Recommendations
         </h2>
         <p className="text-xs text-slate-500">
-          Candidates ranked by a multi-signal match score: required skills, location, title
-          similarity, freshness and years of experience.
+          Ranked by an explainable score — experience fit and required skills lead, plus location,
+          title similarity and profile freshness.
         </p>
       </header>
 
@@ -294,12 +330,42 @@ export default function JobRecommendationsPage() {
                   totalRequired={totalRequired}
                   state={rowState[rec.candidate.id] ?? { status: 'idle' }}
                   onAdd={() => addCandidate(rec)}
+                  onOpenPreview={() => openRecommendationPreview(rec)}
                 />
               ))}
             </ul>
           )}
         </div>
       </div>
+
+      {urlAppId && (
+        <CandidateDrawer
+          applicationId={urlAppId}
+          onClose={closeDrawerUrl}
+          pipeline={pipeline}
+        />
+      )}
+      {!urlAppId && urlCandidateId && (
+        <CandidateDrawer
+          applicationId={null}
+          previewCandidateId={urlCandidateId}
+          previewJobTitle={job.title}
+          previewPrimaryAction={{
+            label:
+              rowState[urlCandidateId]?.status === 'adding'
+                ? 'Adding…'
+                : rowState[urlCandidateId]?.status === 'added'
+                  ? 'Added to job'
+                  : 'Add to job',
+            disabled:
+              rowState[urlCandidateId]?.status === 'adding' ||
+              rowState[urlCandidateId]?.status === 'added',
+            onClick: () => addCandidateById(urlCandidateId),
+          }}
+          onClose={closeDrawerUrl}
+          pipeline={pipeline}
+        />
+      )}
     </div>
   );
 }
@@ -351,21 +417,24 @@ function RecommendationRow({
   totalRequired,
   state,
   onAdd,
+  onOpenPreview,
 }: {
   rec: RecommendedCandidate;
   totalRequired: number;
   state: AddState;
   onAdd: () => void;
+  onOpenPreview: () => void;
 }) {
   const { candidate, score, scorePct, matchedSkills, missingSkills, breakdown, reasons } = rec;
   return (
     <li
-      className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
+      className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-brand-300 hover:bg-slate-50/80"
       data-testid="recommendation-row"
       data-candidate-id={candidate.id}
+      onClick={onOpenPreview}
     >
-      <div className="flex flex-col items-center gap-1">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+      <div className="flex w-12 shrink-0 flex-col items-center gap-2.5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold leading-none tracking-tight text-brand-700">
           {(candidate.firstName[0] ?? '?') + (candidate.lastName[0] ?? '')}
         </div>
         <ScoreBadge
@@ -439,28 +508,36 @@ function ScoreBadge({
   const circumference = 2 * Math.PI * radius;
   const dash = (scorePct / 100) * circumference;
   return (
-    <div
-      className="relative flex h-10 w-10 items-center justify-center"
-      title={tooltip}
-      data-testid="match-score"
-      data-score-pct={scorePct}
-    >
-      <svg width={40} height={40} viewBox="0 0 40 40" aria-hidden>
-        <circle cx={20} cy={20} r={radius} fill="transparent" stroke="#e2e8f0" strokeWidth={3} />
-        <circle
-          cx={20}
-          cy={20}
-          r={radius}
-          fill="transparent"
-          stroke={color}
-          strokeWidth={3}
-          strokeDasharray={`${dash} ${circumference - dash}`}
-          strokeDashoffset={0}
-          transform="rotate(-90 20 20)"
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className={`absolute text-[10px] font-semibold ${textColor}`}>{scorePct}%</span>
+    <div className="flex w-11 shrink-0 flex-col items-center" title={tooltip} data-testid="match-score" data-score-pct={scorePct}>
+      <div className="relative h-11 w-11 shrink-0">
+        <svg
+          className="block h-full w-full overflow-visible"
+          viewBox="0 0 40 40"
+          aria-hidden
+        >
+          <circle cx={20} cy={20} r={radius} fill="transparent" stroke="#e2e8f0" strokeWidth={3} />
+          <circle
+            cx={20}
+            cy={20}
+            r={radius}
+            fill="transparent"
+            stroke={color}
+            strokeWidth={3}
+            strokeDasharray={`${dash} ${circumference - dash}`}
+            strokeDashoffset={0}
+            transform="rotate(-90 20 20)"
+            strokeLinecap="round"
+          />
+        </svg>
+        <span
+          className={`pointer-events-none absolute inset-0 flex items-center justify-center ${textColor}`}
+        >
+          <span className="flex items-baseline gap-px font-semibold tabular-nums leading-none">
+            <span className="text-[9px]">{scorePct}</span>
+            <span className="translate-y-[-0.1em] text-[5.5px] font-bold opacity-90">%</span>
+          </span>
+        </span>
+      </div>
       <span className="sr-only">
         {totalRequired > 0
           ? `${matched} of ${totalRequired} required skills matched.`
@@ -505,8 +582,9 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
   if (state.status === 'added') {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200"
         data-testid="recommendation-added"
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <Check size={12} /> Added
       </span>
@@ -516,8 +594,11 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
     return (
       <button
         type="button"
-        onClick={onClick}
-        className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100"
         title={state.message}
       >
         Retry
@@ -527,9 +608,12 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       disabled={state.status === 'adding'}
-      className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
       data-testid="recommendation-add"
     >
       <UserPlus size={12} /> {state.status === 'adding' ? 'Adding…' : 'Add to job'}

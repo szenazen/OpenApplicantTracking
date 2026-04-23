@@ -18,6 +18,7 @@ export interface SearchCandidateHit {
   email: string | null;
   currentTitle: string | null;
   currentCompany: string | null;
+  mostRecentApplicationId: string | null;
 }
 
 export type SearchHit = SearchJobHit | SearchCandidateHit;
@@ -85,6 +86,11 @@ export class SearchService {
           email: true,
           currentTitle: true,
           currentCompany: true,
+          applications: {
+            orderBy: { updatedAt: 'desc' },
+            take: 1,
+            select: { id: true },
+          },
         },
         orderBy: [{ updatedAt: 'desc' }],
         take: 5,
@@ -107,6 +113,7 @@ export class SearchService {
       email: c.email,
       currentTitle: c.currentTitle,
       currentCompany: c.currentCompany,
+      mostRecentApplicationId: c.applications[0]?.id ?? null,
     }));
 
     return {
