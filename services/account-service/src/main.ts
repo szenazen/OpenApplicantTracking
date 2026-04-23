@@ -13,6 +13,7 @@ async function bootstrap() {
 
   app.enableCors({ origin: true, credentials: true });
   app.use(helmet({ contentSecurityPolicy: false }));
+  app.setGlobalPrefix('api', { exclude: ['health'] });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -4,7 +4,7 @@
 #
 # Then:
 #   curl -s http://localhost:3010/health
-#   curl -s http://localhost:3010/accounts/<accountId> -H "Authorization: Bearer <jwt>"
+#   curl -s http://localhost:3010/api/accounts/<accountId> -H "Authorization: Bearer <jwt>"
 #
 # The monolith (apps/api) is unchanged; the web app still talks to :3001 by default.
 # Use an edge gateway (see services/README.md) when you are ready to strangler-route traffic.
