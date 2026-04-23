@@ -12,6 +12,8 @@
     "start": "node dist/main.js",
     "dev": "DOTENV_CONFIG_PATH=../../.env nest start --watch",
     "typecheck": "tsc --noEmit",
+    "test": "jest --testPathPattern=test/unit",
+    "test:integration": "jest --testPathPattern=test/integration",
     "clean": "rm -rf dist src/generated .turbo"
   },
   "dependencies": {
@@ -33,12 +35,18 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
+    "@nestjs/testing": "^10.4.4",
     "@oat/config": "workspace:*",
     "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.13",
     "@types/node": "^20.16.10",
     "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^6.0.2",
     "dotenv": "^16",
+    "jest": "^29.7.0",
     "prisma": "^5.20.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.5.4"
   }
 }

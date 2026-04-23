@@ -91,11 +91,20 @@ jobs:
       - name: Generate Prisma clients
         run: pnpm --filter @oat/api db:generate
 
+      - name: Generate account-service Prisma client
+        run: pnpm --filter @oat/account-service db:generate
+
       - name: Migrate all datasources
         run: pnpm --filter @oat/api db:migrate
 
       - name: API unit/integration tests
         run: pnpm --filter @oat/api test
+
+      - name: Account service unit tests
+        run: pnpm --filter @oat/account-service test
+
+      - name: Account service integration tests
+        run: pnpm --filter @oat/account-service test:integration
 
   e2e-tests:
     runs-on: ubuntu-latest

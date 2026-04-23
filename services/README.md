@@ -40,6 +40,8 @@ curl -s http://localhost:3010/api/invitations -H "Authorization: Bearer $TOKEN" 
 
 Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validate in both processes.
 
+**Tests:** after `pnpm --filter @oat/api db:migrate` (shared global DB), run `pnpm --filter @oat/account-service db:generate && pnpm --filter @oat/account-service test` (unit, no DB) and `pnpm --filter @oat/account-service test:integration` (HTTP + Postgres). CI runs both in the `api-tests` job.
+
 **Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) only adds `account-service`; it does not remove or replace `apps/api`.
 
 ## Local testing: Kubernetes (kind / k3d)
