@@ -13,6 +13,8 @@ import { useJob } from './JobContext';
  * {@link useJob}; this tab owns:
  *   - `?application=<id>` and `?candidate=<id>` (preview / Cmd+K) as drawer
  *     selection, deep-linkable from Activities / command palette,
+ *   - `?highlightCard=<applicationId>` after “View on board” in the drawer —
+ *     scrolls to the Kanban card and runs a short blink, then drops the param,
  *   - the Kanban card overrides so drawer-side comment / reaction /
  *     candidate edits update the board badges without a full refetch.
  */
@@ -23,6 +25,7 @@ export default function JobCandidatesPage() {
   const searchParams = useSearchParams();
   const urlAppId = searchParams.get('application');
   const urlCandidateId = searchParams.get('candidate');
+  const urlHighlightCard = searchParams.get('highlightCard');
   /** Local selection updates immediately; URL follows via `setUrlAppId` (Next can lag on `useSearchParams`). */
   const [selectedAppId, setSelectedAppId] = useState<string | null>(urlAppId);
   const [cardOverrides, setCardOverrides] = useState<Record<string, Partial<ApplicationCard>>>({});
@@ -52,6 +55,31 @@ export default function JobCandidatesPage() {
       // Next's soft navigation doesn't always update `window.location` immediately;
       // keep the address bar in sync so Playwright, deep-links, and `useSearchParams` agree.
       window.history.replaceState(window.history.state ?? {}, '', href);
+    },
+    [pathname, router],
+  );
+
+  const clearHighlightFromUrl = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('highlightCard')) return;
+    params.delete('highlightCard');
+    const qs = params.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(href, { scroll: false });
+    window.history.replaceState(window.history.state ?? {}, '', href);
+  }, [pathname, router]);
+
+  const focusApplicationOnBoard = useCallback(
+    (applicationId: string) => {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('application');
+      params.delete('candidate');
+      params.set('highlightCard', applicationId);
+      const qs = params.toString();
+      const href = qs ? `${pathname}?${qs}` : pathname;
+      router.replace(href, { scroll: false });
+      window.history.replaceState(window.history.state ?? {}, '', href);
+      setSelectedAppId(null);
     },
     [pathname, router],
   );
@@ -116,6 +144,8 @@ export default function JobCandidatesPage() {
         onCardsChange={handleCardsChange}
         onOpenCard={handleOpenCard}
         cardOverrides={cardOverrides}
+        highlightApplicationId={urlHighlightCard}
+        onHighlightConsumed={clearHighlightFromUrl}
       />
       <CandidateDrawer
         applicationId={urlCandidateId ? null : selectedAppId}
@@ -129,6 +159,7 @@ export default function JobCandidatesPage() {
         onClose={handleCloseDrawer}
         pipeline={pipeline}
         onActivityChange={handleActivityChange}
+        onViewOnBoard={focusApplicationOnBoard}
       />
     </>
   );

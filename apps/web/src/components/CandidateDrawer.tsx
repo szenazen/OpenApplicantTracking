@@ -19,6 +19,7 @@ import {
   Clipboard,
   ClipboardCheck,
   Clock,
+  LayoutGrid,
   type LucideIcon,
   Mail,
   MapPin,
@@ -93,6 +94,11 @@ interface Props {
    * badges / columns without a full refetch.
    */
   onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
+  /**
+   * Kanban tab only: closes the drawer and focuses the candidate’s card on the
+   * board (scroll + blink). Other pages omit this.
+   */
+  onViewOnBoard?: (applicationId: string) => void;
 }
 
 function mapProfileToDrawerCandidate(c: CandidateProfileDetail): ApplicationDetail['candidate'] {
@@ -142,6 +148,7 @@ export function CandidateDrawer({
   onClose,
   pipeline,
   onActivityChange,
+  onViewOnBoard,
 }: Props) {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [previewCandidate, setPreviewCandidate] = useState<ApplicationDetail['candidate'] | null>(
@@ -319,6 +326,7 @@ export function CandidateDrawer({
             detail={detail}
             pipeline={pipeline}
             onActivityChange={onActivityChange}
+            onViewOnBoard={onViewOnBoard}
             onLocalCandidateUpdate={(patch) =>
               setDetail((prev) =>
                 prev ? { ...prev, candidate: { ...prev.candidate, ...patch } } : prev,
@@ -414,12 +422,14 @@ function DrawerBody({
   detail,
   pipeline,
   onActivityChange,
+  onViewOnBoard,
   onLocalCandidateUpdate,
   onRefresh,
 }: {
   detail: ApplicationDetail;
   pipeline?: Pipeline;
   onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
+  onViewOnBoard?: (applicationId: string) => void;
   onLocalCandidateUpdate: (patch: Partial<ApplicationDetail['candidate']>) => void;
   onRefresh: () => void;
 }) {
@@ -456,9 +466,22 @@ function DrawerBody({
 
       {/* Current application context + stage control */}
       <section className="rounded-md border border-slate-200 p-3" data-testid="drawer-application">
-        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Current application
-        </h4>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Current application
+          </h4>
+          {pipeline && onViewOnBoard && (
+            <button
+              type="button"
+              onClick={() => onViewOnBoard(detail.id)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-brand-700 shadow-sm hover:border-brand-300 hover:bg-brand-50"
+              data-testid="drawer-view-on-board"
+            >
+              <LayoutGrid size={12} aria-hidden />
+              View on board
+            </button>
+          )}
+        </div>
         <p className="text-sm text-slate-700">
           <span className="font-semibold">{job.title}</span>
           {job.department ? ` · ${job.department}` : ''}

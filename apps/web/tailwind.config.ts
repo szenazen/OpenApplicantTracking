@@ -12,6 +12,15 @@ const config: Config = {
           700: '#4338ca',
         },
       },
+      keyframes: {
+        'kanban-card-blink': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgb(99 102 241 / 0)' },
+          '50%': { boxShadow: '0 0 0 5px rgb(99 102 241 / 0.45)' },
+        },
+      },
+      animation: {
+        'kanban-card-blink': 'kanban-card-blink 0.65s ease-in-out 3',
+      },
     },
   },
   plugins: [],

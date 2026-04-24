@@ -61,6 +61,13 @@ interface Props {
    * matching cards to be patched in place.
    */
   cardOverrides?: Record<string, Partial<ApplicationCard>>;
+  /**
+   * When set (e.g. from `?highlightCard=` after “View on board” in the drawer),
+   * scrolls the card into view and runs a short blink animation, then calls
+   * {@link onHighlightConsumed} so the host can drop the query param.
+   */
+  highlightApplicationId?: string | null;
+  onHighlightConsumed?: () => void;
 }
 
 /** Pixels from the horizontal edge where auto-scroll should engage during a drag. */
@@ -82,6 +89,8 @@ export function KanbanBoard({
   onCardsChange,
   onOpenCard,
   cardOverrides,
+  highlightApplicationId = null,
+  onHighlightConsumed,
 }: Props) {
   const { token, activeAccountId } = useAuth();
   const [cards, setCards] = useState<ApplicationCard[]>(initialCards);
@@ -132,6 +141,8 @@ export function KanbanBoard({
   // against candidate name / current title / current company / headline.
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  /** Drives ring + blink on the card targeted by `highlightApplicationId`. */
+  const [pulseCardId, setPulseCardId] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -182,6 +193,47 @@ export function KanbanBoard({
   const visibleCount = filteredCards.length;
   const totalCount = cards.length;
   const hasNoMatches = normalizedQuery !== '' && visibleCount === 0;
+
+  // `?highlightCard=` — scroll to the card, blink, then let the host strip the param.
+  useEffect(() => {
+    if (!highlightApplicationId) {
+      setPulseCardId(null);
+      return;
+    }
+    if (!onHighlightConsumed) return;
+
+    const exists = cards.some((c) => c.id === highlightApplicationId);
+    if (!exists) {
+      onHighlightConsumed();
+      return;
+    }
+
+    const visibleWithSearch = normalizedQuery === '' ? cards : cards.filter((c) => matchesQuery(c, normalizedQuery));
+    const hiddenBySearch =
+      normalizedQuery !== '' && !visibleWithSearch.some((c) => c.id === highlightApplicationId);
+    if (hiddenBySearch) {
+      setQuery('');
+      return;
+    }
+
+    setPulseCardId(highlightApplicationId);
+    const scrollT = window.setTimeout(() => {
+      const el = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-card-id="${highlightApplicationId}"]`,
+      );
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }, 120);
+
+    const doneT = window.setTimeout(() => {
+      setPulseCardId(null);
+      onHighlightConsumed();
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(scrollT);
+      window.clearTimeout(doneT);
+    };
+  }, [highlightApplicationId, cards, normalizedQuery, onHighlightConsumed]);
 
   // Socket.IO subscription.
   useEffect(() => {
@@ -478,7 +530,10 @@ export function KanbanBoard({
                               'group cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-shadow ' +
                               (dragSnapshot.isDragging
                                 ? 'border-brand-500 shadow-md'
-                                : 'border-slate-200 hover:border-brand-500 hover:shadow')
+                                : 'border-slate-200 hover:border-brand-500 hover:shadow') +
+                              (pulseCardId === card.id
+                                ? ' z-10 ring-2 ring-brand-500 ring-offset-2 animate-kanban-card-blink'
+                                : '')
                             }
                             data-testid="kanban-card"
                             data-card-id={card.id}
