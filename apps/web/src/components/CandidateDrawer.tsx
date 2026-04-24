@@ -95,10 +95,11 @@ interface Props {
    */
   onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
   /**
-   * Kanban tab only: closes the drawer and focuses the candidate’s card on the
-   * board (scroll + blink). Other pages omit this.
+   * When the drawer is opened **off** the job Kanban (candidates list, Cmd+K,
+   * recommendations, …): navigate to the board and run the highlight blink.
+   * Omit on the Kanban tab itself — the user is already on the board.
    */
-  onViewOnBoard?: (applicationId: string) => void;
+  onViewOnBoard?: (ctx: { applicationId: string; jobId: string }) => void;
 }
 
 function mapProfileToDrawerCandidate(c: CandidateProfileDetail): ApplicationDetail['candidate'] {
@@ -429,7 +430,7 @@ function DrawerBody({
   detail: ApplicationDetail;
   pipeline?: Pipeline;
   onActivityChange?: (applicationId: string, patch: ActivityPatch) => void;
-  onViewOnBoard?: (applicationId: string) => void;
+  onViewOnBoard?: (ctx: { applicationId: string; jobId: string }) => void;
   onLocalCandidateUpdate: (patch: Partial<ApplicationDetail['candidate']>) => void;
   onRefresh: () => void;
 }) {
@@ -470,10 +471,10 @@ function DrawerBody({
           <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Current application
           </h4>
-          {pipeline && onViewOnBoard && (
+          {onViewOnBoard && (
             <button
               type="button"
-              onClick={() => onViewOnBoard(detail.id)}
+              onClick={() => onViewOnBoard({ applicationId: detail.id, jobId: detail.job.id })}
               className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-brand-700 shadow-sm hover:border-brand-300 hover:bg-brand-50"
               data-testid="drawer-view-on-board"
             >

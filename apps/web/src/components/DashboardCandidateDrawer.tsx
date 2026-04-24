@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CandidateDrawer } from '@/components/CandidateDrawer';
-import { drawerHandledByPage } from '@/lib/dashboard-drawer-url';
+import { drawerHandledByPage, jobBoardHighlightHref } from '@/lib/dashboard-drawer-url';
 
 /**
  * Renders {@link CandidateDrawer} from `?application=` / `?candidate=` on any
@@ -29,6 +29,13 @@ export function DashboardCandidateDrawer() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
+  const onViewOnBoard = useCallback(
+    ({ jobId, applicationId }: { jobId: string; applicationId: string }) => {
+      router.push(jobBoardHighlightHref(jobId, applicationId));
+    },
+    [router],
+  );
+
   if (!shouldShow) return null;
 
   return (
@@ -36,6 +43,7 @@ export function DashboardCandidateDrawer() {
       applicationId={appId}
       previewCandidateId={appId ? null : candidateId}
       onClose={onClose}
+      onViewOnBoard={appId ? onViewOnBoard : undefined}
     />
   );
 }

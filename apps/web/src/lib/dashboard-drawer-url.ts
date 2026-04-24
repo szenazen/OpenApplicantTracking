@@ -27,3 +27,9 @@ export function drawerHandledByPage(pathname: string): boolean {
   if (/^\/dashboard\/jobs\/[^/]+\/recommendations$/.test(pathname)) return true;
   return false;
 }
+
+/** Navigate from a non-Kanban surface to the job board with a one-shot card highlight. */
+export function jobBoardHighlightHref(jobId: string, applicationId: string): string {
+  const q = new URLSearchParams({ highlightCard: applicationId });
+  return `/dashboard/jobs/${jobId}?${q.toString()}`;
+}

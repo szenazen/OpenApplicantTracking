@@ -13,7 +13,7 @@ import { useJob } from './JobContext';
  * {@link useJob}; this tab owns:
  *   - `?application=<id>` and `?candidate=<id>` (preview / Cmd+K) as drawer
  *     selection, deep-linkable from Activities / command palette,
- *   - `?highlightCard=<applicationId>` after “View on board” in the drawer —
+ *   - `?highlightCard=<applicationId>` (e.g. from Candidates / Cmd+K / Recommendations)
  *     scrolls to the Kanban card and runs a short blink, then drops the param,
  *   - the Kanban card overrides so drawer-side comment / reaction /
  *     candidate edits update the board badges without a full refetch.
@@ -68,21 +68,6 @@ export default function JobCandidatesPage() {
     router.replace(href, { scroll: false });
     window.history.replaceState(window.history.state ?? {}, '', href);
   }, [pathname, router]);
-
-  const focusApplicationOnBoard = useCallback(
-    (applicationId: string) => {
-      const params = new URLSearchParams(window.location.search);
-      params.delete('application');
-      params.delete('candidate');
-      params.set('highlightCard', applicationId);
-      const qs = params.toString();
-      const href = qs ? `${pathname}?${qs}` : pathname;
-      router.replace(href, { scroll: false });
-      window.history.replaceState(window.history.state ?? {}, '', href);
-      setSelectedAppId(null);
-    },
-    [pathname, router],
-  );
 
   const handleCardsChange = useCallback(
     (cards: Parameters<typeof setLiveApplications>[0]) => setLiveApplications(cards),
@@ -159,7 +144,6 @@ export default function JobCandidatesPage() {
         onClose={handleCloseDrawer}
         pipeline={pipeline}
         onActivityChange={handleActivityChange}
-        onViewOnBoard={focusApplicationOnBoard}
       />
     </>
   );

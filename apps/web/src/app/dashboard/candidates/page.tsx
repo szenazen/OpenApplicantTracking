@@ -13,6 +13,7 @@ import {
 import { avatarColor, formatYearsExperience, getInitials } from '@/lib/format';
 import { useAuth } from '@/lib/store';
 import { CandidateDrawer } from '@/components/CandidateDrawer';
+import { jobBoardHighlightHref } from '@/lib/dashboard-drawer-url';
 
 /**
  * Dedicated Candidates view — complements the Kanban-per-job page by giving
@@ -224,6 +225,13 @@ export default function CandidatesPage() {
     [updateUrl],
   );
 
+  const goViewOnBoard = useCallback(
+    ({ jobId, applicationId }: { jobId: string; applicationId: string }) => {
+      router.push(jobBoardHighlightHref(jobId, applicationId));
+    },
+    [router],
+  );
+
   const hasAnyFilter =
     urlQ.length > 0 ||
     urlSkillIds.length > 0 ||
@@ -336,7 +344,11 @@ export default function CandidatesPage() {
       )}
 
       {urlAppId && (
-        <CandidateDrawer applicationId={urlAppId} onClose={closeDrawer} />
+        <CandidateDrawer
+          applicationId={urlAppId}
+          onClose={closeDrawer}
+          onViewOnBoard={goViewOnBoard}
+        />
       )}
       {!urlAppId && urlCandidateId && (
         <CandidateDrawer

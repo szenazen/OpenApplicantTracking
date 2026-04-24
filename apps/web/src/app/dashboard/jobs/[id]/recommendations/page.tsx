@@ -20,6 +20,7 @@ import {
   type SkillRef,
 } from '@/lib/api';
 import { CandidateDrawer } from '@/components/CandidateDrawer';
+import { jobBoardHighlightHref } from '@/lib/dashboard-drawer-url';
 import { useJob } from '../JobContext';
 
 type AddState =
@@ -145,6 +146,13 @@ export default function JobRecommendationsPage() {
     router.replace(href, { scroll: false });
     window.history.replaceState(window.history.state ?? {}, '', href);
   }, [pathname, router]);
+
+  const goViewOnBoard = useCallback(
+    ({ jobId, applicationId }: { jobId: string; applicationId: string }) => {
+      router.push(jobBoardHighlightHref(jobId, applicationId));
+    },
+    [router],
+  );
 
   const openRecommendationPreview = useCallback(
     (rec: RecommendedCandidate) => {
@@ -343,6 +351,7 @@ export default function JobRecommendationsPage() {
           applicationId={urlAppId}
           onClose={closeDrawerUrl}
           pipeline={pipeline}
+          onViewOnBoard={goViewOnBoard}
         />
       )}
       {!urlAppId && urlCandidateId && (
