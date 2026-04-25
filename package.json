@@ -25,6 +25,7 @@
     "dev:account-service": "pnpm --filter @oat/account-service dev",
     "build:account-service": "pnpm --filter @oat/account-service build",
     "compose:gateway": "docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build",
+    "dev:web-bff": "pnpm --filter @oat/web-bff dev",
     "clean": "turbo run clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {

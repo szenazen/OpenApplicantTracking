@@ -2,13 +2,14 @@
 
 The original system design targets **separate deployable services** (Account & membership, RBAC, Pipeline, …). The main app remains a **modular monolith** at [`apps/api`](../apps/api) so day-to-day development is unchanged.
 
-This directory holds **extracted services** that implement slices of the design. Traffic is migrated gradually: the monolith keeps owning routes until an edge gateway forwards specific paths to a service.
+This directory holds **extracted services** and the **Web BFF** that implement slices of the design. [`apps/api`](../apps/api) remains the **parallel modular monolith** (backup + day-to-day dev). Traffic is migrated gradually: the monolith keeps owning routes until the BFF forwards specific paths to a service.
 
 ## Current extracts
 
 | Service | Port (local) | Responsibility | Status |
 |--------|---------------|----------------|--------|
-| [`api-gateway`](./api-gateway) | `3080` | nginx: routes account slice → account-service, default → monolith (`:3001` on host) | Local / ref for prod |
+| [`web-bff`](./web-bff) | `3080` | **Web BFF** (design: single browser/edge entry): routes account slice → account-service, default → monolith on host (`:3001`) | Default edge |
+| [`api-gateway`](./api-gateway) | (optional) | **Legacy** nginx: same routing rules in config; for comparison only — see [api-gateway/README.md](./api-gateway/README.md) | Optional |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
 
 Responses include `_service: "account-service"` so callers can verify routing during migration.
@@ -19,9 +20,9 @@ Responses include `_service: "account-service"` so callers can verify routing du
 
 ## Unified API (local, prod-like) — recommended for microservice testing
 
-See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single front door / BFF, services behind an edge). This repo’s **nginx** gateway ([`api-gateway/`](./api-gateway)) routes the **account** strangler paths to `account-service` and everything else (including `POST /api/accounts`, jobs, candidates, `POST /api/platform/accounts`, `/realtime`) to the monolith on **:3001**.
+See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **Web BFF** at the edge, services behind it). The **Web BFF** ([`web-bff/`](./web-bff)) implements routing in code ([`web-bff/src/routing.ts`](./web-bff/src/routing.ts), tested): account strangler paths → `account-service`; everything else (including `POST /api/accounts`, jobs, candidates, `POST /api/platform/accounts`, `/realtime`) → the monolith on **:3001**. Rules stay aligned with the optional [nginx](api-gateway/nginx.conf) reference.
 
-1. **Infra + account-service + api-gateway** (from repo root):
+1. **Infra + account-service + web-bff** (from repo root):
 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build
@@ -33,7 +34,7 @@ See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single fr
    pnpm --filter @oat/api dev
    ```
 
-3. **Point the web app at the gateway** (single `NEXT_PUBLIC_API_URL`):
+3. **Point the web app at the BFF** (single `NEXT_PUBLIC_API_URL`):
 
    ```bash
    export NEXT_PUBLIC_API_URL=http://localhost:3080
@@ -41,9 +42,9 @@ See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single fr
    pnpm --filter @oat/web dev
    ```
 
-4. **Smoke the edge**: `curl -s http://localhost:3080/gateway-health` and `curl -s http://localhost:3080/health` (monolith, once API is up).
+4. **Smoke the edge**: `curl -s http://localhost:3080/bff-health` and `curl -s http://localhost:3080/health` (monolith, once API is up).
 
-**Production —** deploy the same path-based routing on your real edge (ALB, Envoy, etc.); replace `host.docker.internal:3001` in [`api-gateway/nginx.conf`](./api-gateway/nginx.conf) with the monolith service address.
+**Production —** deploy the same path-based routing on your real edge (or run the BFF as a service); for compose-style URLs, set `MONOLITH_URL` / `ACCOUNT_SERVICE_URL` on the BFF instead of `host.docker.internal:3001` when the monolith is in-cluster. See [`web-bff/Dockerfile`](./web-bff/Dockerfile).
 
 ## Local testing: Docker Compose (account-service only)
 
@@ -75,7 +76,9 @@ Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validat
 
 **Tests:** after `pnpm --filter @oat/api db:migrate` (shared global DB), run `pnpm --filter @oat/account-service db:generate && pnpm --filter @oat/account-service test` (unit, no DB) and `pnpm --filter @oat/account-service test:integration` (HTTP + Postgres). CI runs both in the `api-tests` job.
 
-**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`api-gateway` (:3080)** and **`account-service` (:3010)**; the monolith still runs on the host.
+**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`web-bff` (:3080)** and **`account-service` (:3010)**; the monolith still runs on the host.
+
+**Web BFF tests:** `pnpm --filter @oat/web-bff test`
 
 ## Local testing: Kubernetes (kind / k3d)
 
@@ -91,13 +94,13 @@ kind load docker-image oat-account-service:local --name oat-dev
 
 See [`k8s/local/README.md`](./k8s/local/README.md) for manifests and limitations (dev Postgres is still usually Docker Compose or a cloud DB).
 
-## Edge gateway (prod)
+## Edge (prod)
 
-**Reference routing** is implemented in [`api-gateway/nginx.conf`](./api-gateway/nginx.conf) (local). In production, mirror the same path rules on **Envoy, Traefik, AWS ALB, or NGINX** with your internal service DNS instead of `host.docker.internal:3001`.
+**Reference routing** is implemented in [`web-bff/src/routing.ts`](web-bff/src/routing.ts) and optionally mirrored in [`api-gateway/nginx.conf`](./api-gateway/nginx.conf). In production, run the **Web BFF** as a service or mirror the same path rules on **Envoy, Traefik, AWS ALB, or NGINX** with your internal service DNS.
 
 ## Roadmap (suggested order)
 
-1. **Gateway** (nginx) + account reads/invites/members + `GET /platform/accounts` → next: more slices or `POST /platform/accounts` when regional service exists.
+1. **Web BFF** + account reads/invites/members + `GET /platform/accounts` → next: more extracted services or `POST /platform/accounts` when a dedicated provisioning service exists.
 2. Pipeline service (regional DB) behind router.
 3. **Socket.IO:** add Redis adapter + separate realtime deployment (see `docs/adr/0002-realtime-kanban-via-socketio.md`).
 4. Async domain events via existing Redpanda in `docker-compose.yml`.

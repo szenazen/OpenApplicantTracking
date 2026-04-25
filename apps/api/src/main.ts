@@ -12,7 +12,8 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.API_PORT ?? 3001);
-  const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
+  const corsOrigins = (process.env.CORS_ORIGINS ??
+    'http://localhost:3002,http://localhost:3000')
     .split(',')
     .map((o) => o.trim());
 

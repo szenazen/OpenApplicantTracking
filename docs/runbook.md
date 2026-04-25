@@ -16,7 +16,7 @@ make migrate                  # prisma migrate deploy against every datasource i
 make seed                     # demo user + 3 accounts (hays-us, hays-eu, hays-sg)
 
 pnpm --filter @oat/api dev    # :3001  (swagger at /api/docs)
-pnpm --filter @oat/web dev    # :3000
+pnpm --filter @oat/web dev    # :3002
 ```
 
 Demo login: `demo@openapplicanttracking.local` / `demo1234`.
@@ -36,7 +36,7 @@ docker compose -p oat down -v # nukes volumes (fresh start)
 | --- | --- |
 | API liveness | `curl http://localhost:3001/health` (returns `{status:"ok"}`) |
 | API + DB readiness | `curl http://localhost:3001/api/health/ready` (queries global + every regional DB) |
-| Web | `curl -I http://localhost:3000/login` |
+| Web | `curl -I http://localhost:3002/login` |
 | Postgres global | `PGPASSWORD=oat psql -h localhost -p 5432 -U oat -d oat_global -c 'select 1'` |
 | Postgres regions | ports `5433..5437` (us-east-1, eu-west-1, ap-southeast-1, ap-northeast-1, ap-southeast-2) |
 

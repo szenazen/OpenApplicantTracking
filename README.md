@@ -51,7 +51,7 @@ OpenApplicantTracking (OAT) is a modern ATS designed for recruitment agencies an
 
 Full diagrams live in [`design/`](./design) (e.g. [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) — *Global Control Plane* vs *Regional ATS*, *Web BFF* at the edge) and the exported architecture doc is [`docs/architecture.md`](./docs/architecture.md).
 
-**Strangler / microservices (local + prod pattern):** an **nginx** edge in [`services/api-gateway/`](./services/api-gateway) routes the extracted **Account & membership** API to `account-service` and everything else (auth, jobs, candidates, `POST` tenant create, `/realtime`) to the monolith. Docker Compose: [`services/README.md`](./services/README.md#unified-api-local-prod-like--recommended-for-microservice-testing) (single entry **:3080** for the web app: `NEXT_PUBLIC_API_URL`).
+**Strangler / microservices (local + prod pattern):** the **Web BFF** in [`services/web-bff/`](./services/web-bff) (per [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml)) is the default edge: it routes the extracted **Account & membership** API to `account-service` and everything else (auth, jobs, candidates, `POST` tenant create, `/realtime`) to the monolith. [`apps/api`](./apps/api) stays the **parallel modular monolith** for development and as the reference when adding slices. Optional legacy **nginx** proxy: [`services/api-gateway/README.md`](./services/api-gateway/README.md). Docker Compose: [`services/README.md`](./services/README.md#unified-api-local-prod-like--recommended-for-microservice-testing) (single entry **:3080** for the web app: `NEXT_PUBLIC_API_URL`).
 
 ---
 
@@ -76,7 +76,7 @@ make seed
 
 # 5. Run
 make dev
-# Web:      http://localhost:3000
+# Web:      http://localhost:3002
 # API:      http://localhost:3001/api/docs    (OpenAPI / Swagger)
 # MailHog:  http://localhost:8025
 # MinIO:    http://localhost:9001  (minioadmin / minioadmin)
@@ -90,8 +90,9 @@ Demo login credentials are printed by `make seed`.
 
 | Path | What's inside |
 | --- | --- |
-| `apps/api` | NestJS modular monolith. Modules mirror the service boundaries in the design diagram (Auth, User, Account, RBAC, Skills, Job, Pipeline, Candidate, Application, File, Notification, Audit, Realtime). |
+| `apps/api` | NestJS **modular monolith** (parallel reference implementation). Modules mirror service boundaries in the design diagram; remains the main dev path until a slice is extracted. |
 | `apps/web` | Next.js 14 App Router UI: login, account switcher, jobs list, Kanban board with dnd-kit + Socket.IO live updates, candidate drawer. |
+| `services/web-bff` | **Web BFF** — single HTTP/WS entry in front of `account-service` and the monolith; implements [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) edge routing in code. |
 | `apps/workers` | Background workers: CV parser (pdf-parse), audit consumer, notification dispatcher. |
 | `packages/shared-types` | Shared TypeScript types + generated OpenAPI client + Zod schemas. |
 | `packages/config` | Shared `tsconfig`, ESLint, Prettier. |
@@ -142,7 +143,7 @@ make up && make migrate && make seed
 pnpm --filter @oat/api test          # 22 tests
 
 # Frontend end-to-end (Playwright, chromium)
-# (expects api on :3001 and web on :3000)
+# (expects api on :3001 and web on :3002)
 pnpm --filter @oat/api dev &          # or: node --env-file=.env apps/api/dist/main.js
 pnpm --filter @oat/web dev &
 pnpm --filter @oat/web exec playwright install chromium   # first run only

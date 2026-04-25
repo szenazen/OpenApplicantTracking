@@ -11,6 +11,7 @@ import {
   PlayCircle,
   XCircle,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ApplicationCard, JobStatus, JobSummary, Pipeline } from '@/lib/api';
 
 /**
@@ -185,7 +186,7 @@ function MenuItem({
   disabled,
   testId,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   label: string;
   onClick: () => void;
   disabled?: boolean;
@@ -217,7 +218,7 @@ function StatusMenuItem({
 }: {
   current: string;
   value: JobStatus;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   label: string;
   onPick: (s: JobStatus) => void;
 }) {

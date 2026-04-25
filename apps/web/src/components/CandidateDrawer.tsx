@@ -200,7 +200,7 @@ export function CandidateDrawer({
   }, [onClose]);
 
   const onAsideTransitionEnd = useCallback(
-    (e: TransitionEvent<HTMLAsideElement>) => {
+    (e: TransitionEvent<HTMLElement>) => {
       if (e.propertyName !== 'transform') return;
       if (closingRef.current) {
         closingRef.current = false;

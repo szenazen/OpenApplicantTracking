@@ -16,6 +16,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { api, HomeSummary, JobListResponse, JobStatus, JobSummary } from '@/lib/api';
 import { useAuth } from '@/lib/store';
 import { formatRelativeDuration } from '@/lib/format';
@@ -400,7 +401,7 @@ function StatTile({
   label: string;
   value: number | null;
   hint?: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   tone: 'brand' | 'slate' | 'success' | 'danger';
   testId?: string;
 }) {
@@ -441,7 +442,7 @@ function Panel({
 }: {
   title: string;
   subtitle?: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   children: React.ReactNode;
   testId?: string;
   className?: string;

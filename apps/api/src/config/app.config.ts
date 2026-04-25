@@ -12,8 +12,10 @@ const RegionEnvSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(14).default(10),
   REDIS_URL: z.string().url().optional(),
   API_PORT: z.coerce.number().int().default(3001),
-  WEB_URL: z.string().url().default('http://localhost:3000'),
-  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  WEB_URL: z.string().url().default('http://localhost:3002'),
+  CORS_ORIGINS: z
+    .string()
+    .default('http://localhost:3002,http://localhost:3000'),
   SOCKETIO_PATH: z.string().default('/realtime'),
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().default(1025),

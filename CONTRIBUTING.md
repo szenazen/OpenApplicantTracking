@@ -19,10 +19,10 @@ pnpm install
 make up          # starts postgres (global + regional), redis, redpanda, minio, mailhog
 pnpm db:migrate  # runs prisma migrations for all datasources
 pnpm db:seed     # seeds skills catalog, demo accounts (Hays US/EU/SG)
-pnpm dev         # runs api (3001), web (3000), workers
+pnpm dev         # runs api (3001), web (3002), workers
 ```
 
-Open http://localhost:3000, log in with the seeded credentials printed in the terminal.
+Open http://localhost:3002, log in with the seeded credentials printed in the terminal.
 
 ## Workspace layout
 

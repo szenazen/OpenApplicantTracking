@@ -24,9 +24,9 @@ env:
   BCRYPT_ROUNDS: '4'
   API_PORT: '3001'
   API_URL: http://localhost:3001
-  WEB_PORT: '3000'
-  WEB_URL: http://localhost:3000
-  CORS_ORIGINS: http://localhost:3000
+  WEB_PORT: '3002'
+  WEB_URL: http://localhost:3002
+  CORS_ORIGINS: http://localhost:3002,http://localhost:3000
   SOCKETIO_PATH: /realtime
   NODE_ENV: test
   LOG_LEVEL: warn
@@ -106,6 +106,9 @@ jobs:
       - name: Account service integration tests
         run: pnpm --filter @oat/account-service test:integration
 
+      - name: Web BFF tests
+        run: pnpm --filter @oat/web-bff test
+
   e2e-tests:
     runs-on: ubuntu-latest
     needs: api-tests
@@ -163,14 +166,14 @@ jobs:
 
       - name: Start web
         run: |
-          pnpm --filter @oat/web exec next start -p 3000 > /tmp/web.log 2>&1 &
+          pnpm --filter @oat/web exec next start -p 3002 > /tmp/web.log 2>&1 &
           echo "WEB_PID=$!" >> $GITHUB_ENV
 
       - name: Wait for servers
         run: |
           for i in $(seq 1 30); do
             api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/health || true)
-            web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login || true)
+            web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3002/login || true)
             echo "attempt $i api=$api web=$web"
             if [ "$api" = "200" ] && [ "$web" = "200" ]; then exit 0; fi
             sleep 2

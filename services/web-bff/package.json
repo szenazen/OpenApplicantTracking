@@ -1,0 +1,30 @@
+{
+  "name": "@oat/web-bff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web BFF — single edge for the browser; routes to modular monolith (apps/api) and extracted services (design/ATS-design.drawio.xml).",
+  "license": "Apache-2.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "DOTENV_CONFIG_PATH=../../.env tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest --config jest.config.cjs",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@fastify/reply-from": "^9.8.0",
+    "fastify": "^4.28.1"
+  },
+  "devDependencies": {
+    "@oat/config": "workspace:*",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.16.10",
+    "dotenv": "^16",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4"
+  }
+}

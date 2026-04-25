@@ -1,0 +1,58 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { buildApp } from '../src/build-app';
+
+function listen(server: ReturnType<typeof createServer>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address() as AddressInfo;
+      resolve(addr.port);
+    });
+    server.on('error', reject);
+  });
+}
+
+describe('Web BFF proxy (integration)', () => {
+  it('routes invitations to account upstream and jobs to monolith', async () => {
+    const monolith = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ upstream: 'monolith', path: req.url ?? '' }));
+    });
+    const account = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ upstream: 'account', path: req.url ?? '' }));
+    });
+    const mPort = await listen(monolith);
+    const aPort = await listen(account);
+
+    const app = await buildApp({
+      monolithUrl: `http://127.0.0.1:${mPort}`,
+      accountServiceUrl: `http://127.0.0.1:${aPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const bffPort = bffAddr.port;
+    const base = `http://127.0.0.1:${bffPort}`;
+
+    try {
+      const inv = await fetch(`${base}/api/invitations`);
+      expect(inv.ok).toBe(true);
+      const invJson = (await inv.json()) as { upstream: string };
+      expect(invJson.upstream).toBe('account');
+
+      const jobs = await fetch(`${base}/api/jobs`);
+      expect(jobs.ok).toBe(true);
+      const jobsJson = (await jobs.json()) as { upstream: string };
+      expect(jobsJson.upstream).toBe('monolith');
+
+      const health = await fetch(`${base}/bff-health`);
+      expect(health.ok).toBe(true);
+      expect(await health.text()).toContain('ok');
+    } finally {
+      await app.close();
+      monolith.close();
+      account.close();
+    }
+  });
+});
