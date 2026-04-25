@@ -1,4 +1,6 @@
-// Dedicated DB for the pipeline slice (design: one DB per service for extracted domains).
+// Dedicated DB for the pipeline + job slice (one service — one storage).
+// Shapes align with apps/api regional.prisma for safer migration / HTTP delegate parity.
+
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/pipeline"
@@ -9,8 +11,89 @@ datasource db {
   url      = env("PIPELINE_SLICE_DATABASE_URL")
 }
 
-/// Marker row proving this service owns storage independent of apps/api.
-model PipelineSliceMarker {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+model Pipeline {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  statuses PipelineStatus[]
+  jobs     Job[]
+
+  @@unique([accountId, name])
+  @@index([accountId])
+  @@map("pipelines")
+}
+
+model PipelineStatus {
+  id         String   @id @default(cuid())
+  pipelineId String
+  name       String
+  position   Int
+  color      String?
+  category   StatusCategory @default(IN_PROGRESS)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([pipelineId, name])
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+  @@map("pipeline_statuses")
+}
+
+enum StatusCategory {
+  NEW
+  IN_PROGRESS
+  HIRED
+  DROPPED
+}
+
+/// Minimal job rows in the slice store (strangler target for job+pipeline data).
+model Job {
+  id         String   @id @default(cuid())
+  accountId  String
+  title      String
+  status     JobStatus   @default(DRAFT)
+  pipelineId String
+  headCount  Int         @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([accountId, status])
+  @@index([pipelineId])
+  @@map("jobs")
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  ON_HOLD
+  CLOSED
+  ARCHIVED
+}
+
+/// In-slice application stub — enforces “no cards on stage” before status delete (monolith parity).
+model Application {
+  id              String   @id @default(cuid())
+  accountId       String
+  currentStatusId String
+  jobId           String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  currentStatus PipelineStatus @relation(fields: [currentStatusId], references: [id], onDelete: Restrict)
+  job            Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([currentStatusId])
+  @@index([accountId, jobId])
+  @@map("applications")
 }

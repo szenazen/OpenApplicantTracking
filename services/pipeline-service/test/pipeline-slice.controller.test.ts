@@ -1,20 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { PipelineSliceController } from '../src/slice/pipeline-slice.controller';
+import { PipelineHealthController } from '../src/slice/pipeline-health.controller';
 
-describe('PipelineSliceController', () => {
-  it('verify returns marker count from prisma', async () => {
+describe('PipelineHealthController', () => {
+  it('verify returns pipeline count from prisma', async () => {
     const mod: TestingModule = await Test.createTestingModule({
-      controllers: [PipelineSliceController],
+      controllers: [PipelineHealthController],
       providers: [
         {
           provide: PrismaService,
-          useValue: { pipelineSliceMarker: { count: async () => 0 } },
+          useValue: { pipeline: { count: async () => 0 } },
         },
       ],
     }).compile();
-    const c = mod.get(PipelineSliceController);
+    const c = mod.get(PipelineHealthController);
     const r = await c.verify();
-    expect(r).toMatchObject({ _service: 'pipeline-service', db: 'ok', markerRows: 0 });
+    expect(r).toMatchObject({ _service: 'pipeline-service', db: 'ok', pipelineCount: 0 });
   });
 });

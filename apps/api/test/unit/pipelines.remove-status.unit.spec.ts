@@ -1,10 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { PipelinesService } from '../../src/modules/pipelines/pipelines.service';
+import { PipelinesPrismaService } from '../../src/modules/pipelines/pipelines-prisma.service';
 import { RegionRouterService } from '../../src/infrastructure/region-router/region-router.service';
 
-describe('PipelinesService.removeStatus (unit)', () => {
-  let svc: PipelinesService;
+describe('PipelinesPrismaService.removeStatus (unit)', () => {
+  let svc: PipelinesPrismaService;
   const client = {
     pipelineStatus: {
       findFirst: jest.fn(),
@@ -23,9 +23,9 @@ describe('PipelinesService.removeStatus (unit)', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const moduleRef = await Test.createTestingModule({
-      providers: [PipelinesService, { provide: RegionRouterService, useValue: router }],
+      providers: [PipelinesPrismaService, { provide: RegionRouterService, useValue: router }],
     }).compile();
-    svc = moduleRef.get(PipelinesService);
+    svc = moduleRef.get(PipelinesPrismaService);
   });
 
   it('throws NotFound when status missing', async () => {

@@ -30,6 +30,10 @@ The BFF routes **existing** public paths to the monolith or `account-service` (s
 | Strangler + slices | No | Yes |
 | **apps/api** source edits | N/A (direct) | N/A (host process unchanged) |
 
+### Optional: monolith delegates `/api/pipelines` to pipeline-service
+
+By default, pipeline CRUD stays on **regional Prisma** inside `apps/api`. To point the same `/api/pipelines` routes at **pipeline-service** (without changing the web app or route paths), set on the monolith: `OAT_USE_PIPELINE_SLICE=true` and `PIPELINE_SLICE_BASE_URL` (e.g. `http://127.0.0.1:3030`). The monolith forwards `Authorization` and `x-account-id` to the slice. When this flag is off, behavior matches monolith-only mode.
+
 ## Async events
 
 **Redpanda** (Kafka API) in `docker-compose.yml` is used by `kafka-ping` in the overlay to validate produce/consume. Future domain event publishers can use the same brokers without changing the monolith until you add optional hooks.

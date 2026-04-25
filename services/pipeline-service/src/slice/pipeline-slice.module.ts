@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PipelineSliceController } from './pipeline-slice.controller';
+import { PrismaModule } from '../prisma/prisma.module';
+import { PipelineHealthController } from './pipeline-health.controller';
 
-@Module({ controllers: [PipelineSliceController] })
+@Module({
+  imports: [PrismaModule],
+  controllers: [PipelineHealthController],
+})
 export class PipelineSliceModule {}

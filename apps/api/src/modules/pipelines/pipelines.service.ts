@@ -1,102 +1,69 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { RegionRouterService } from '../../infrastructure/region-router/region-router.service';
+import { Injectable } from '@nestjs/common';
+import { PipelinesPrismaService } from './pipelines-prisma.service';
+import { PipelinesSliceClientService } from './pipelines-slice-client.service';
 
+function useSlice(): boolean {
+  return process.env.OAT_USE_PIPELINE_SLICE === '1' || process.env.OAT_USE_PIPELINE_SLICE === 'true';
+}
+
+/**
+ * When `OAT_USE_PIPELINE_SLICE=true`, pipeline CRUD is delegated to
+ * `PIPELINE_SLICE_BASE_URL` (see @oat/pipeline-service). Default: regional Prisma.
+ */
 @Injectable()
 export class PipelinesService {
-  constructor(private readonly router: RegionRouterService) {}
+  constructor(
+    private readonly prisma: PipelinesPrismaService,
+    private readonly slice: PipelinesSliceClientService,
+  ) {}
 
-  async list(accountId: string) {
-    const { client } = await this.router.forAccount(accountId);
-    return client.pipeline.findMany({
-      where: { accountId },
-      include: { statuses: { orderBy: { position: 'asc' } } },
-      orderBy: { createdAt: 'asc' },
-    });
+  list(accountId: string, authHeader?: string) {
+    if (useSlice()) return this.slice.list(accountId, authHeader) as ReturnType<PipelinesPrismaService['list']>;
+    return this.prisma.list(accountId);
   }
 
-  async get(accountId: string, pipelineId: string) {
-    const { client } = await this.router.forAccount(accountId);
-    const p = await client.pipeline.findFirst({
-      where: { id: pipelineId, accountId },
-      include: { statuses: { orderBy: { position: 'asc' } } },
-    });
-    if (!p) throw new NotFoundException('Pipeline not found');
-    return p;
+  get(accountId: string, pipelineId: string, authHeader?: string) {
+    if (useSlice()) return this.slice.get(accountId, pipelineId, authHeader) as ReturnType<PipelinesPrismaService['get']>;
+    return this.prisma.get(accountId, pipelineId);
   }
 
-  async create(accountId: string, name: string, statuses: { name: string; color?: string; category?: string }[]) {
-    const { client } = await this.router.forAccount(accountId);
-    return client.pipeline.create({
-      data: {
-        accountId,
-        name,
-        statuses: {
-          create: statuses.map((s, i) => ({
-            name: s.name,
-            position: i,
-            color: s.color,
-            category: (s.category as any) ?? 'IN_PROGRESS',
-          })),
-        },
-      },
-      include: { statuses: { orderBy: { position: 'asc' } } },
-    });
-  }
-
-  async addStatus(accountId: string, pipelineId: string, input: { name: string; color?: string; category?: string; position?: number }) {
-    const { client } = await this.router.forAccount(accountId);
-    const pipeline = await client.pipeline.findFirst({ where: { id: pipelineId, accountId } });
-    if (!pipeline) throw new NotFoundException('Pipeline not found');
-
-    const max = await client.pipelineStatus.aggregate({
-      where: { pipelineId },
-      _max: { position: true },
-    });
-    const position = input.position ?? (max._max.position ?? -1) + 1;
-
-    return client.pipelineStatus.create({
-      data: {
-        pipelineId,
-        name: input.name,
-        color: input.color,
-        category: (input.category as any) ?? 'IN_PROGRESS',
-        position,
-      },
-    });
-  }
-
-  async reorderStatuses(accountId: string, pipelineId: string, orderedStatusIds: string[]) {
-    const { client } = await this.router.forAccount(accountId);
-    await client.$transaction(
-      orderedStatusIds.map((id, index) =>
-        client.pipelineStatus.update({ where: { id }, data: { position: index } }),
-      ),
-    );
-    return this.get(accountId, pipelineId);
-  }
-
-  /**
-   * Removes a stage when no applications still reference it (move cards first).
-   */
-  async removeStatus(accountId: string, pipelineId: string, statusId: string) {
-    const { client } = await this.router.forAccount(accountId);
-    const status = await client.pipelineStatus.findFirst({
-      where: {
-        id: statusId,
-        pipelineId,
-        pipeline: { id: pipelineId, accountId },
-      },
-    });
-    if (!status) throw new NotFoundException('Pipeline status not found');
-
-    const inUse = await client.application.count({ where: { currentStatusId: statusId } });
-    if (inUse > 0) {
-      throw new BadRequestException(
-        `This stage still has ${inUse} application(s). Move them to another stage before removing it.`,
-      );
+  create(
+    accountId: string,
+    name: string,
+    statuses: { name: string; color?: string; category?: string }[],
+    authHeader?: string,
+  ) {
+    if (useSlice()) {
+      return this.slice.create(accountId, name, statuses, authHeader) as ReturnType<PipelinesPrismaService['create']>;
     }
+    return this.prisma.create(accountId, name, statuses);
+  }
 
-    await client.pipelineStatus.delete({ where: { id: statusId } });
-    return this.get(accountId, pipelineId);
+  addStatus(
+    accountId: string,
+    pipelineId: string,
+    input: { name: string; color?: string; category?: string; position?: number },
+    authHeader?: string,
+  ) {
+    if (useSlice()) {
+      return this.slice.addStatus(accountId, pipelineId, input, authHeader) as ReturnType<PipelinesPrismaService['addStatus']>;
+    }
+    return this.prisma.addStatus(accountId, pipelineId, input);
+  }
+
+  reorderStatuses(accountId: string, pipelineId: string, orderedStatusIds: string[], authHeader?: string) {
+    if (useSlice()) {
+      return this.slice.reorderStatuses(accountId, pipelineId, orderedStatusIds, authHeader) as ReturnType<
+        PipelinesPrismaService['reorderStatuses']
+      >;
+    }
+    return this.prisma.reorderStatuses(accountId, pipelineId, orderedStatusIds);
+  }
+
+  removeStatus(accountId: string, pipelineId: string, statusId: string, authHeader?: string) {
+    if (useSlice()) {
+      return this.slice.removeStatus(accountId, pipelineId, statusId, authHeader) as ReturnType<PipelinesPrismaService['removeStatus']>;
+    }
+    return this.prisma.removeStatus(accountId, pipelineId, statusId);
   }
 }
