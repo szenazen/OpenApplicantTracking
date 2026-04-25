@@ -8,6 +8,7 @@ This directory holds **extracted services** that implement slices of the design.
 
 | Service | Port (local) | Responsibility | Status |
 |--------|---------------|----------------|--------|
+| [`api-gateway`](./api-gateway) | `3080` | nginx: routes account slice → account-service, default → monolith (`:3001` on host) | Local / ref for prod |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
 
 Responses include `_service: "account-service"` so callers can verify routing during migration.
@@ -16,7 +17,35 @@ Responses include `_service: "account-service"` so callers can verify routing du
 
 `account-service/prisma/schema.prisma` must stay aligned with [`apps/api/prisma/global.prisma`](../apps/api/prisma/global.prisma) (only the `generator client.output` line differs). Until we extract a shared `packages/db-global`, update both when the global model changes.
 
-## Local testing: Docker Compose (recommended)
+## Unified API (local, prod-like) — recommended for microservice testing
+
+See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single front door / BFF, services behind an edge). This repo’s **nginx** gateway ([`api-gateway/`](./api-gateway)) routes the **account** strangler paths to `account-service` and everything else (including `POST /api/accounts`, jobs, candidates, `POST /api/platform/accounts`, `/realtime`) to the monolith on **:3001**.
+
+1. **Infra + account-service + api-gateway** (from repo root):
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build
+   ```
+
+2. **Monolith on the host** (expects port 3001 — same as always):
+
+   ```bash
+   pnpm --filter @oat/api dev
+   ```
+
+3. **Point the web app at the gateway** (single `NEXT_PUBLIC_API_URL`):
+
+   ```bash
+   export NEXT_PUBLIC_API_URL=http://localhost:3080
+   export API_URL=http://localhost:3080
+   pnpm --filter @oat/web dev
+   ```
+
+4. **Smoke the edge**: `curl -s http://localhost:3080/gateway-health` and `curl -s http://localhost:3080/health` (monolith, once API is up).
+
+**Production —** deploy the same path-based routing on your real edge (ALB, Envoy, etc.); replace `host.docker.internal:3001` in [`api-gateway/nginx.conf`](./api-gateway/nginx.conf) with the monolith service address.
+
+## Local testing: Docker Compose (account-service only)
 
 Uses the **same** Postgres as dev (`docker-compose.yml`).
 
@@ -24,11 +53,11 @@ Uses the **same** Postgres as dev (`docker-compose.yml`).
 # Terminal 1 — infra + monolith as today (optional if DB already up)
 docker compose up -d global-pg
 
-# Terminal 2 — account microservice (overlay file)
-docker compose -f docker-compose.yml -f docker-compose.microservices.yml up --build account-service
+# Terminal 2 — full overlay (gateway :3080 + account-service :3010) — see "Unified API" above
+docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build
 ```
 
-Smoke:
+Legacy smoke (direct to account-service, no gateway):
 
 ```bash
 curl -s http://localhost:3010/health
@@ -46,7 +75,7 @@ Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validat
 
 **Tests:** after `pnpm --filter @oat/api db:migrate` (shared global DB), run `pnpm --filter @oat/account-service db:generate && pnpm --filter @oat/account-service test` (unit, no DB) and `pnpm --filter @oat/account-service test:integration` (HTTP + Postgres). CI runs both in the `api-tests` job.
 
-**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) only adds `account-service`; it does not remove or replace `apps/api`.
+**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`api-gateway` (:3080)** and **`account-service` (:3010)**; the monolith still runs on the host.
 
 ## Local testing: Kubernetes (kind / k3d)
 
@@ -62,18 +91,13 @@ kind load docker-image oat-account-service:local --name oat-dev
 
 See [`k8s/local/README.md`](./k8s/local/README.md) for manifests and limitations (dev Postgres is still usually Docker Compose or a cloud DB).
 
-## Edge gateway (next step)
+## Edge gateway (prod)
 
-When you strangler-route production traffic, put **Envoy, Traefik, or NGINX** in front of:
-
-- **Monolith** — `/api/*` (default)
-- **account-service** — e.g. `/api/accounts/*`, `/api/invitations`, `/api/platform/accounts` (GET only; route what this service implements)
-
-The web app can keep using the monolith until you point `NEXT_PUBLIC_API_URL` (or a BFF) at the gateway.
+**Reference routing** is implemented in [`api-gateway/nginx.conf`](./api-gateway/nginx.conf) (local). In production, mirror the same path rules on **Envoy, Traefik, AWS ALB, or NGINX** with your internal service DNS instead of `host.docker.internal:3001`.
 
 ## Roadmap (suggested order)
 
-1. Account reads + invitations + membership + `GET /platform/accounts` → `POST /platform/accounts` (regional) or **gateway** next.
+1. **Gateway** (nginx) + account reads/invites/members + `GET /platform/accounts` → next: more slices or `POST /platform/accounts` when regional service exists.
 2. Pipeline service (regional DB) behind router.
 3. **Socket.IO:** add Redis adapter + separate realtime deployment (see `docs/adr/0002-realtime-kanban-via-socketio.md`).
 4. Async domain events via existing Redpanda in `docker-compose.yml`.

@@ -49,7 +49,9 @@ OpenApplicantTracking (OAT) is a modern ATS designed for recruitment agencies an
    └── Web / Mobile BFF · Realtime Gateway (Socket.IO) · Workers (CV · Audit · Email)
 ```
 
-Full diagrams live in [`design/`](./design) and the exported architecture doc is [`docs/architecture.md`](./docs/architecture.md).
+Full diagrams live in [`design/`](./design) (e.g. [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) — *Global Control Plane* vs *Regional ATS*, *Web BFF* at the edge) and the exported architecture doc is [`docs/architecture.md`](./docs/architecture.md).
+
+**Strangler / microservices (local + prod pattern):** an **nginx** edge in [`services/api-gateway/`](./services/api-gateway) routes the extracted **Account & membership** API to `account-service` and everything else (auth, jobs, candidates, `POST` tenant create, `/realtime`) to the monolith. Docker Compose: [`services/README.md`](./services/README.md#unified-api-local-prod-like--recommended-for-microservice-testing) (single entry **:3080** for the web app: `NEXT_PUBLIC_API_URL`).
 
 ---
 

@@ -1,13 +1,17 @@
-# Overlay: run the first extracted microservice alongside existing infra.
+# Microservices + edge gateway overlay (strangler) — see design/ATS-design.drawio.xml
+# (Web/BFF in front; Global services split from Regional/monolith as slices mature).
 #
-#   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d account-service
+#   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d
 #
-# Then:
-#   curl -s http://localhost:3010/health
-#   curl -s http://localhost:3010/api/accounts/<accountId> -H "Authorization: Bearer <jwt>"
+# Then start the monolith on the **host** (expects :3001):
+#   pnpm --filter @oat/api dev
 #
-# The monolith (apps/api) is unchanged; the web app still talks to :3001 by default.
-# Use an edge gateway (see services/README.md) when you are ready to strangler-route traffic.
+# Point the web app at the gateway (single entry, prod-like):
+#   export NEXT_PUBLIC_API_URL=http://localhost:3080
+#   export API_URL=http://localhost:3080
+#   pnpm --filter @oat/web dev
+#
+# Direct account-service (bypass gateway): :3010
 
 name: oat
 
@@ -28,3 +32,16 @@ services:
     depends_on:
       global-pg:
         condition: service_healthy
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: oat-api-gateway
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - account-service

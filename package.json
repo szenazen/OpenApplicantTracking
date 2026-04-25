@@ -24,6 +24,7 @@
     "db:seed": "pnpm --filter @oat/api db:seed",
     "dev:account-service": "pnpm --filter @oat/account-service dev",
     "build:account-service": "pnpm --filter @oat/account-service build",
+    "compose:gateway": "docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build",
     "clean": "turbo run clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {
