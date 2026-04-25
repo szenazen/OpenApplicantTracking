@@ -8,7 +8,7 @@ This directory holds **extracted services** that implement slices of the design.
 
 | Service | Port (local) | Responsibility | Status |
 |--------|---------------|----------------|--------|
-| [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations (JWT + `x-account-id` same as monolith) | Strangler slice |
+| [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
 
 Responses include `_service: "account-service"` so callers can verify routing during migration.
 
@@ -36,7 +36,11 @@ curl -s http://localhost:3010/health
 curl -s http://localhost:3010/api/accounts/<accountId> -H "Authorization: Bearer $TOKEN"
 curl -s http://localhost:3010/api/accounts/current/members -H "Authorization: Bearer $TOKEN" -H "x-account-id: <accountId>"
 curl -s http://localhost:3010/api/invitations -H "Authorization: Bearer $TOKEN" -H "x-account-id: <accountId>"
+# Platform admin (user with platformAdmin=true in global DB), no x-account-id:
+curl -s http://localhost:3010/api/platform/accounts -H "Authorization: Bearer $PLAT_JWT"
 ```
+
+`POST /api/platform/accounts` (tenant provisioning with regional DB) remains on the monolith until a **pipeline/router** service exists.
 
 Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validate in both processes.
 
@@ -63,13 +67,13 @@ See [`k8s/local/README.md`](./k8s/local/README.md) for manifests and limitations
 When you strangler-route production traffic, put **Envoy, Traefik, or NGINX** in front of:
 
 - **Monolith** — `/api/*` (default)
-- **account-service** — e.g. `/api/accounts/:id`, `/api/accounts/current/*`, `/api/invitations` (route only what this service implements)
+- **account-service** — e.g. `/api/accounts/*`, `/api/invitations`, `/api/platform/accounts` (GET only; route what this service implements)
 
 The web app can keep using the monolith until you point `NEXT_PUBLIC_API_URL` (or a BFF) at the gateway.
 
 ## Roadmap (suggested order)
 
-1. Account reads + invitations + membership writes (in progress) → platform admin.
+1. Account reads + invitations + membership + `GET /platform/accounts` → `POST /platform/accounts` (regional) or **gateway** next.
 2. Pipeline service (regional DB) behind router.
 3. **Socket.IO:** add Redis adapter + separate realtime deployment (see `docs/adr/0002-realtime-kanban-via-socketio.md`).
 4. Async domain events via existing Redpanda in `docker-compose.yml`.

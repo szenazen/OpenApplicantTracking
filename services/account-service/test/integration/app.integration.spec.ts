@@ -17,9 +17,12 @@ describe('account-service HTTP (integration)', () => {
   const suffix = uniqueSuffix();
   const adminEmail = `as-admin-${suffix}@test.local`;
   const memberEmail = `as-member-${suffix}@test.local`;
+  const platEmail = `as-plat-${suffix}@test.local`;
   let accountId: string;
   let adminUserId: string;
+  let platUserId: string;
   let adminToken: string;
+  let platToken: string;
   let adminRoleId: string;
 
   beforeAll(async () => {
@@ -73,6 +76,16 @@ describe('account-service HTTP (integration)', () => {
       },
     });
 
+    const platUser = await prisma.user.create({
+      data: {
+        email: platEmail,
+        displayName: 'AS Platform',
+        status: 'ACTIVE',
+        platformAdmin: true,
+      },
+    });
+    platUserId = platUser.id;
+
     const acc = await prisma.accountDirectory.create({
       data: {
         name: `AS Co ${suffix}`,
@@ -93,6 +106,7 @@ describe('account-service HTTP (integration)', () => {
     });
 
     adminToken = jwt.sign({ sub: adminUserId, email: adminEmail });
+    platToken = jwt.sign({ sub: platUserId, email: platEmail });
   });
 
   afterAll(async () => {
@@ -101,7 +115,7 @@ describe('account-service HTTP (integration)', () => {
       await prisma.membership.deleteMany({ where: { accountId } });
       await prisma.accountDirectory.delete({ where: { id: accountId } });
       await prisma.user.deleteMany({
-        where: { email: { in: [adminEmail, memberEmail] } },
+        where: { email: { in: [adminEmail, memberEmail, platEmail] } },
       });
     } finally {
       await app.close();
@@ -166,5 +180,21 @@ describe('account-service HTTP (integration)', () => {
     expect(listRes.body.some((i: { id: string }) => i.id === createRes.body.id)).toBe(true);
 
     await request(app.getHttpServer()).delete(`/api/invitations/${createRes.body.id}`).set(auth()).expect(200);
+  });
+
+  it('GET /api/platform/accounts: non-platform user is forbidden', async () => {
+    await request(app.getHttpServer())
+      .get('/api/platform/accounts')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(403);
+  });
+
+  it('GET /api/platform/accounts: platform admin lists directory', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/platform/accounts')
+      .set('Authorization', `Bearer ${platToken}`)
+      .expect(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.some((a: { slug: string }) => a.slug === `as-co-${suffix}`)).toBe(true);
   });
 });
