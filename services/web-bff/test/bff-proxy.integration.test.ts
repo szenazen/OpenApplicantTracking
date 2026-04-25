@@ -14,6 +14,11 @@ function listen(server: ReturnType<typeof createServer>): Promise<number> {
 }
 
 describe('Web BFF proxy (integration)', () => {
+  const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
+  afterEach(() => {
+    process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
+  });
+
   it('routes invitations to account upstream and jobs to monolith', async () => {
     const monolith = createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -53,6 +58,37 @@ describe('Web BFF proxy (integration)', () => {
       await app.close();
       monolith.close();
       account.close();
+    }
+  });
+
+  it('rewrites /api/pipelines to slice when BFF_PIPELINES_TO_SLICE', async () => {
+    process.env.BFF_PIPELINES_TO_SLICE = '1';
+    const pipeline = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url ?? '' }));
+    });
+    const pPort = await listen(pipeline);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      pipelineServiceUrl: `http://127.0.0.1:${pPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const bffPort = bffAddr.port;
+    const base = `http://127.0.0.1:${bffPort}`;
+
+    try {
+      const r = await fetch(`${base}/api/pipelines`, {
+        headers: { 'x-account-id': 'acc-test' },
+      });
+      expect(r.ok).toBe(true);
+      const j = (await r.json()) as { path: string };
+      expect(j.path).toBe('/api/slice/pipeline/accounts/acc-test/pipelines');
+    } finally {
+      await app.close();
+      pipeline.close();
     }
   });
 });

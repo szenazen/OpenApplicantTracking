@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import replyFrom from '@fastify/reply-from';
 
 import { buildAggregatedHealth } from './aggregated-health';
+import { bffPipelinesToSliceEnabled, isPublicPipelinesPath, rewritePipelinesToSlicePath } from './pipeline-public-rewrite';
 import { resolveUpstream, type UpstreamKind } from './routing';
 
 function trimBase(s: string): string {
@@ -103,11 +104,21 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
     if (kind === 'auth' && !auth) {
       return reply.status(503).send({ error: 'Auth slice not configured (set AUTH_SERVICE_URL)' });
     }
-    const dest = buildDestUrl(
-      request,
-      { monolith, account, pipeline, auth },
-      kind,
-    );
+    let dest: string;
+    if (kind === 'pipeline' && pipeline && bffPipelinesToSliceEnabled() && isPublicPipelinesPath((request.url.split('?')[0] ?? '').split('#')[0] ?? '')) {
+      const acc = request.headers['x-account-id'];
+      const accountId = Array.isArray(acc) ? acc[0] : acc;
+      if (!accountId || typeof accountId !== 'string') {
+        return reply.status(400).send({ error: 'x-account-id header required for pipeline routes' });
+      }
+      dest = new URL(rewritePipelinesToSlicePath(request.url, accountId), `${pipeline}/`).toString();
+    } else {
+      dest = buildDestUrl(
+        request,
+        { monolith, account, pipeline, auth },
+        kind,
+      );
+    }
     return reply.from(dest, {
       rewriteRequestHeaders: (req, headers) => {
         const h: Record<string, string | string[] | number | undefined> = { ...headers };

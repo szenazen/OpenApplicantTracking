@@ -16,6 +16,7 @@
     "db:generate": "prisma generate --schema prisma/global.prisma && prisma generate --schema prisma/regional.prisma",
     "db:migrate": "tsx --env-file=../../.env scripts/migrate-all.ts",
     "db:seed": "tsx --env-file=../../.env scripts/seed.ts",
+    "drain:pipelines-to-slice": "tsx scripts/drain-pipelines-to-slice.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

@@ -1,3 +1,5 @@
+import { bffPipelinesToSliceEnabled, isPublicPipelinesPath } from './pipeline-public-rewrite';
+
 /**
  * Resolves which upstream the Web BFF should use for a request.
  * Mirrors the strangler rules previously implemented in
@@ -28,6 +30,11 @@ export function resolveUpstream(method: string, url: string): UpstreamKind {
   }
 
   if (isEnabled('PIPELINE_SLICE') && p.startsWith('/api/slice/pipeline')) {
+    return 'pipeline';
+  }
+
+  /** Strangler: same JSON as monolith `/api/pipelines` → pipeline-service (needs `x-account-id`). */
+  if (bffPipelinesToSliceEnabled() && isPublicPipelinesPath(p)) {
     return 'pipeline';
   }
 

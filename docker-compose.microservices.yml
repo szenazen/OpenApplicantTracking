@@ -10,6 +10,11 @@
 #   export API_URL=http://localhost:3080
 #   pnpm --filter @oat/web dev
 #
+# Pipeline slice QA: BFF sets BFF_PIPELINES_TO_SLICE=1 → `/api/pipelines` hits pipeline-service
+# (not the monolith). Use the same JWT_SECRET in `.env` as in compose. Optional: run the monolith
+# without pipeline delegation, or with OAT_USE_PIPELINE_SLICE only when using :3001 without BFF
+# (see docs/qa-pipeline-slice.md).
+#
 # See docs/deployment-modes.md
 
 name: oat
@@ -57,11 +62,16 @@ services:
     environment:
       PIPELINE_SLICE_DATABASE_URL: postgresql://oat:oat@pipeline-slice-pg:5432/oat_pipeline_slice?schema=public
       PIPELINE_SERVICE_PORT: "3030"
+      # Same secret as monolith + account-service (JWT from browser must validate here).
+      JWT_SECRET: ${JWT_SECRET:-dev-change-me-please-use-32-chars-minimum!!}
+      KAFKA_BROKERS: redpanda:9092
     ports:
       - "3030:3030"
     depends_on:
       pipeline-slice-pg:
         condition: service_healthy
+      redpanda:
+        condition: service_started
 
   auth-service:
     build:
@@ -100,6 +110,8 @@ services:
       BFF_PORT: "3080"
       PIPELINE_SLICE_ENABLED: "1"
       AUTH_SLICE_ENABLED: "1"
+      # Public /api/pipelines → pipeline-service (same JSON; needs x-account-id on requests).
+      BFF_PIPELINES_TO_SLICE: "1"
       PIPELINE_SERVICE_URL: http://pipeline-service:3030
       AUTH_SERVICE_URL: http://auth-service:3020
       KAFKA_PING_URL: http://kafka-ping:3040

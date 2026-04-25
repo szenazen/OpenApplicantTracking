@@ -3,10 +3,12 @@ import { resolveUpstream } from '../src/routing';
 describe('resolveUpstream', () => {
   const oldPipeline = process.env.PIPELINE_SLICE_ENABLED;
   const oldAuth = process.env.AUTH_SLICE_ENABLED;
+  const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
 
   afterEach(() => {
     process.env.PIPELINE_SLICE_ENABLED = oldPipeline;
     process.env.AUTH_SLICE_ENABLED = oldAuth;
+    process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
   });
 
   it('health is self', () => {
@@ -69,5 +71,13 @@ describe('resolveUpstream', () => {
     expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('auth');
     process.env.AUTH_SLICE_ENABLED = '0';
     expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('monolith');
+  });
+
+  it('BFF forwards /api/pipelines to pipeline when BFF_PIPELINES_TO_SLICE set', () => {
+    process.env.BFF_PIPELINES_TO_SLICE = '1';
+    expect(resolveUpstream('GET', '/api/pipelines')).toBe('pipeline');
+    expect(resolveUpstream('PUT', '/api/pipelines/pid/statuses/reorder')).toBe('pipeline');
+    process.env.BFF_PIPELINES_TO_SLICE = '0';
+    expect(resolveUpstream('GET', '/api/pipelines')).toBe('monolith');
   });
 });

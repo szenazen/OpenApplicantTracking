@@ -61,6 +61,7 @@ export async function buildAggregatedHealth(
   if (o.pipelineServiceUrl) {
     const p = o.pipelineServiceUrl.replace(/\/$/, '');
     out.pipeline = await getJson(new URL('/health', `${p}/`).toString());
+    out.pipelineDb = await getJson(new URL('/api/slice/pipeline/verify', `${p}/`).toString());
   }
   if (o.authServiceUrl) {
     const p = o.authServiceUrl.replace(/\/$/, '');
