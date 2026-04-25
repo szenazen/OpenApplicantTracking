@@ -1,0 +1,38 @@
+{
+  "name": "@oat/auth-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auth slice placeholder (no shared monolith DB) — future token/MFA; apps/api unchanged.",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "dev": "DOTENV_CONFIG_PATH=../../.env nest start --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.4",
+    "@nestjs/config": "^3.2.3",
+    "@nestjs/core": "^10.4.4",
+    "@nestjs/platform-express": "^10.4.4",
+    "helmet": "^8.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.5",
+    "@nestjs/testing": "^10.4.4",
+    "@oat/config": "workspace:*",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.16.10",
+    "@types/supertest": "^6.0.2",
+    "dotenv": "^16",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.5.4"
+  }
+}

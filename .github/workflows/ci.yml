@@ -44,6 +44,8 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @oat/api db:generate
+      - run: pnpm --filter @oat/account-service db:generate
+      - run: pnpm --filter @oat/pipeline-service db:generate
       - run: pnpm -r --if-present lint
       - run: pnpm -r --if-present typecheck
 
@@ -94,6 +96,9 @@ jobs:
       - name: Generate account-service Prisma client
         run: pnpm --filter @oat/account-service db:generate
 
+      - name: Generate pipeline-service Prisma client
+        run: pnpm --filter @oat/pipeline-service db:generate
+
       - name: Migrate all datasources
         run: pnpm --filter @oat/api db:migrate
 
@@ -108,6 +113,15 @@ jobs:
 
       - name: Web BFF tests
         run: pnpm --filter @oat/web-bff test
+
+      - name: Pipeline service tests
+        run: pnpm --filter @oat/pipeline-service test
+
+      - name: Auth service tests
+        run: pnpm --filter @oat/auth-service test
+
+      - name: Kafka ping tests
+        run: pnpm --filter @oat/kafka-ping test
 
   e2e-tests:
     runs-on: ubuntu-latest

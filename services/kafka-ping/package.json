@@ -1,0 +1,29 @@
+{
+  "name": "@oat/kafka-ping",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Async smoke: produce/consume on Redpanda (Kafka API) for domain events path — optional in microservices mode.",
+  "license": "Apache-2.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "DOTENV_CONFIG_PATH=../../.env tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest --config jest.config.cjs",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "@oat/config": "workspace:*",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.16.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4"
+  }
+}

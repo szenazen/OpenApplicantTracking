@@ -11,8 +11,13 @@ This directory holds **extracted services** and the **Web BFF** that implement s
 | [`web-bff`](./web-bff) | `3080` | **Web BFF** (design: single browser/edge entry): routes account slice → account-service, default → monolith on host (`:3001`) | Default edge |
 | [`api-gateway`](./api-gateway) | (optional) | **Legacy** nginx: same routing rules in config; for comparison only — see [api-gateway/README.md](./api-gateway/README.md) | Optional |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
+| [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay): new paths `/api/slice/pipeline/*` (BFF flag); does not touch `apps/api` | Pilot extract |
+| [`auth-service`](./auth-service) | `3020` | New paths `/api/slice/auth/*` (BFF flag); no shared DB; future token/MFA | Pilot extract |
+| [`kafka-ping`](./kafka-ping) | `3040` | Produce/consume on Redpanda (Kafka API) for async path smoke | Dev / wiring |
 
-Responses include `_service: "account-service"` so callers can verify routing during migration.
+**Monolith vs edge:** [docs/deployment-modes.md](../docs/deployment-modes.md).
+
+Responses include `_service: "…"` on several handlers so callers can verify routing during migration.
 
 ### Prisma schema sync
 

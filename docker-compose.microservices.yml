@@ -1,18 +1,16 @@
 # Microservices + Web BFF overlay (strangler) — see design/ATS-design.drawio.xml
-# (Web BFF in front; account-service + modular monolith @ apps/api).
+# (Web BFF in front; account + pipeline + auth slices; kafka-ping for async smoke).
 #
 #   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d
 #
-# Then start the monolith on the **host** (expects :3001):
-#   pnpm --filter @oat/api dev
+# Monolith (apps/api) on host :3001 — unchanged; use monolith mode by pointing
+# the browser at :3001 directly, or wire through BFF (microservices mode).
 #
-# Point the web app at the BFF (single entry, prod-like):
 #   export NEXT_PUBLIC_API_URL=http://localhost:3080
 #   export API_URL=http://localhost:3080
 #   pnpm --filter @oat/web dev
 #
-# Direct account-service (bypass BFF): :3010
-# Optional legacy nginx edge: see services/api-gateway/README.md
+# See docs/deployment-modes.md
 
 name: oat
 
@@ -34,6 +32,62 @@ services:
       global-pg:
         condition: service_healthy
 
+  pipeline-slice-pg:
+    image: postgres:16-alpine
+    container_name: oat-pipeline-slice-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: oat
+      POSTGRES_PASSWORD: oat
+      POSTGRES_DB: oat_pipeline_slice
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports: ["5440:5432"]
+    volumes: [pipeline_slice_data:/var/lib/postgresql/data]
+
+  pipeline-service:
+    build:
+      context: .
+      dockerfile: services/pipeline-service/Dockerfile
+    container_name: oat-pipeline-service
+    restart: unless-stopped
+    environment:
+      PIPELINE_SLICE_DATABASE_URL: postgresql://oat:oat@pipeline-slice-pg:5432/oat_pipeline_slice?schema=public
+      PIPELINE_SERVICE_PORT: "3030"
+    ports:
+      - "3030:3030"
+    depends_on:
+      pipeline-slice-pg:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: oat-auth-service
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_PORT: "3020"
+    ports:
+      - "3020:3020"
+
+  kafka-ping:
+    build:
+      context: .
+      dockerfile: services/kafka-ping/Dockerfile
+    container_name: oat-kafka-ping
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_PING_PORT: "3040"
+    ports:
+      - "3040:3040"
+    depends_on:
+      - redpanda
+
   web-bff:
     build:
       context: .
@@ -44,9 +98,20 @@ services:
       MONOLITH_URL: http://host.docker.internal:3001
       ACCOUNT_SERVICE_URL: http://account-service:3010
       BFF_PORT: "3080"
+      PIPELINE_SLICE_ENABLED: "1"
+      AUTH_SLICE_ENABLED: "1"
+      PIPELINE_SERVICE_URL: http://pipeline-service:3030
+      AUTH_SERVICE_URL: http://auth-service:3020
+      KAFKA_PING_URL: http://kafka-ping:3040
     ports:
       - "3080:3080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - account-service
+      - pipeline-service
+      - auth-service
+      - kafka-ping
+
+volumes:
+  pipeline_slice_data:

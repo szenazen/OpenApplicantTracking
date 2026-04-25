@@ -1,9 +1,18 @@
 import { resolveUpstream } from '../src/routing';
 
 describe('resolveUpstream', () => {
+  const oldPipeline = process.env.PIPELINE_SLICE_ENABLED;
+  const oldAuth = process.env.AUTH_SLICE_ENABLED;
+
+  afterEach(() => {
+    process.env.PIPELINE_SLICE_ENABLED = oldPipeline;
+    process.env.AUTH_SLICE_ENABLED = oldAuth;
+  });
+
   it('health is self', () => {
     expect(resolveUpstream('GET', '/gateway-health')).toBe('self');
     expect(resolveUpstream('GET', '/bff-health')).toBe('self');
+    expect(resolveUpstream('GET', '/api/bff/aggregated-health')).toBe('self');
   });
 
   it('exact /api/accounts goes to monolith for all methods', () => {
@@ -46,5 +55,19 @@ describe('resolveUpstream', () => {
 
   it('preserves query string in path split', () => {
     expect(resolveUpstream('GET', '/api/accounts/abc?x=1')).toBe('account');
+  });
+
+  it('optional pipeline slice when flag set', () => {
+    process.env.PIPELINE_SLICE_ENABLED = '1';
+    expect(resolveUpstream('GET', '/api/slice/pipeline/verify')).toBe('pipeline');
+    process.env.PIPELINE_SLICE_ENABLED = '0';
+    expect(resolveUpstream('GET', '/api/slice/pipeline/verify')).toBe('monolith');
+  });
+
+  it('optional auth slice when flag set', () => {
+    process.env.AUTH_SLICE_ENABLED = '1';
+    expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('auth');
+    process.env.AUTH_SLICE_ENABLED = '0';
+    expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('monolith');
   });
 });

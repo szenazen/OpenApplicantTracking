@@ -1,0 +1,16 @@
+// Dedicated DB for the pipeline slice (design: one DB per service for extracted domains).
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/pipeline"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PIPELINE_SLICE_DATABASE_URL")
+}
+
+/// Marker row proving this service owns storage independent of apps/api.
+model PipelineSliceMarker {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+}

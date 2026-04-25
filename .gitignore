@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 services/account-service/src/generated/
+services/pipeline-service/src/generated/
 build/
 .next/
 .turbo/
