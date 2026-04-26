@@ -19,16 +19,18 @@ pnpm install
 make up          # starts postgres (global + regional), redis, redpanda, minio, mailhog
 pnpm db:migrate  # runs prisma migrations for all datasources
 pnpm db:seed     # seeds skills catalog, demo accounts (Hays US/EU/SG)
-pnpm dev         # runs api (3001), web (3002), workers
+pnpm dev         # runs backup api (3001), web (3002), workers — quick local loop
 ```
 
 Open http://localhost:3002, log in with the seeded credentials printed in the terminal.
+
+For **prod-like** strangler development, use **Web BFF :3080** + compose overlay (`pnpm compose:gateway`) and point `NEXT_PUBLIC_API_URL` at **3080**; keep `apps/api` on 3001 only for routes not yet behind a service ([docs/deployment-modes.md](./docs/deployment-modes.md)).
 
 ## Workspace layout
 
 ```
 apps/
-  api/      NestJS modular monolith (Auth, Accounts, Jobs, Pipelines, Candidates, ...)
+  api/      NestJS modular monolith — backup/reference for unmigrated routes; extend services + BFF first
   web/      Next.js 14 (App Router) UI + Kanban
   workers/  Background workers (CV parser, audit, notifications)
 packages/

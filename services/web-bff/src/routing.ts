@@ -2,13 +2,12 @@ import { bffPipelinesToSliceEnabled, isPublicPipelinesPath } from './pipeline-pu
 
 /**
  * Resolves which upstream the Web BFF should use for a request.
- * Mirrors the strangler rules previously implemented in
- * `services/api-gateway/nginx.conf` — one entry for the browser, Account
- * service vs monolith (see design/ATS-design.drawio.xml: Web BFF, services).
+ * **Primary:** extracted services (account, pipeline, auth, …). **Backup:**
+ * `apps/api` at `MONOLITH_URL` — Nest modular monolith for routes not yet owned
+ * by a slice (see design/ATS-design.drawio.xml).
  *
- * Optional slices (`/api/slice/...`) are **only** used in microservices mode
- * (env flags); monolith mode keeps using apps/api on :3001 directly and
- * never hits these paths.
+ * The identifier `monolith` in {@link UpstreamKind} means that backup API, not
+ * “center of architecture.”
  */
 export type UpstreamKind = 'monolith' | 'account' | 'pipeline' | 'auth' | 'self';
 

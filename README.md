@@ -51,7 +51,7 @@ OpenApplicantTracking (OAT) is a modern ATS designed for recruitment agencies an
 
 Full diagrams live in [`design/`](./design) (e.g. [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) — *Global Control Plane* vs *Regional ATS*, *Web BFF* at the edge) and the exported architecture doc is [`docs/architecture.md`](./docs/architecture.md).
 
-**Strangler / microservices (local + prod pattern):** the **Web BFF** in [`services/web-bff/`](./services/web-bff) (per [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml)) is the default edge: it routes the extracted **Account & membership** API to `account-service` and everything else (auth, jobs, candidates, `POST` tenant create, `/realtime`) to the monolith. [`apps/api`](./apps/api) stays the **parallel modular monolith** for development and as the reference when adding slices. **Run monolith direct (:3001) or through BFF (:3080):** [docs/deployment-modes.md](./docs/deployment-modes.md). Optional legacy **nginx** proxy: [`services/api-gateway/README.md`](./services/api-gateway/README.md). Docker: [`services/README.md`](./services/README.md#unified-api-local-prod-like--recommended-for-microservice-testing).
+**Strangler / microservices (local + prod pattern):** the **Web BFF** on **:3080** ([`services/web-bff/`](./services/web-bff), [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml)) is the **primary** browser/API edge: it routes extracted domains to **services** (e.g. `account-service`, `pipeline-service`) and forwards **everything not yet sliced** to the Nest app in [`apps/api`](./apps/api) on **:3001**. Treat **`apps/api` as backup / reference**—convenient for unmigrated routes and OpenAPI—not as the long-term center of gravity. **Edge (:3080) vs direct monolith (:3001):** [docs/deployment-modes.md](./docs/deployment-modes.md). Optional **nginx**: [`services/api-gateway/README.md`](./services/api-gateway/README.md). Docker: [`services/README.md`](./services/README.md#unified-api-local-prod-like--recommended-for-microservice-testing).
 
 ---
 
@@ -77,7 +77,7 @@ make seed
 # 5. Run
 make dev
 # Web:      http://localhost:3002
-# API:      http://localhost:3001/api/docs    (OpenAPI / Swagger)
+# Backup API (OpenAPI): http://localhost:3001/api/docs  — primary edge is BFF :3080 + services (see docs/deployment-modes.md)
 # MailHog:  http://localhost:8025
 # MinIO:    http://localhost:9001  (minioadmin / minioadmin)
 ```
@@ -90,9 +90,9 @@ Demo login credentials are printed by `make seed`.
 
 | Path | What's inside |
 | --- | --- |
-| `apps/api` | NestJS **modular monolith** (parallel reference implementation). Modules mirror service boundaries in the design diagram; remains the main dev path until a slice is extracted. |
+| `apps/api` | NestJS **modular monolith** — **backup / reference** for routes not yet owned by a slice; same modules as the design diagram. Prefer the BFF + services for prod-like work. |
 | `apps/web` | Next.js 14 App Router UI: login, account switcher, jobs list, Kanban board with dnd-kit + Socket.IO live updates, candidate drawer. |
-| `services/web-bff` | **Web BFF** — single HTTP/WS entry in front of `account-service` and the monolith; implements [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) edge routing in code. |
+| `services/web-bff` | **Web BFF** (primary edge) — routes to extracted services first; forwards the rest to `apps/api` until migrated. Implements [`design/ATS-design.drawio.xml`](./design/ATS-design.drawio.xml) in code. |
 | `apps/workers` | Background workers: CV parser (pdf-parse), audit consumer, notification dispatcher. |
 | `packages/shared-types` | Shared TypeScript types + generated OpenAPI client + Zod schemas. |
 | `packages/config` | Shared `tsconfig`, ESLint, Prettier. |
@@ -111,7 +111,7 @@ The original challenge asks for:
 | --- | --- |
 | Data Structure Design | [`docs/data-model.md`](./docs/data-model.md) · Prisma schemas in `apps/api/prisma/` · source `design/ATS-design.drawio.xml` |
 | High-Level Architecture | [`docs/adr/0001-multi-region-data-residency.md`](./docs/adr/0001-multi-region-data-residency.md) · diagram `design/ATS-design.drawio.png` |
-| API Contracts | Live OpenAPI at `http://localhost:3001/api/docs` after `pnpm --filter @oat/api dev` |
+| API Contracts | Live OpenAPI at `http://localhost:3001/api/docs` when running the backup API (`pnpm --filter @oat/api dev`) |
 | Front-End Interaction & Responsiveness | `apps/web/src/app/dashboard/jobs/[id]/page.tsx` + `apps/web/src/components/KanbanBoard.tsx` · ADR [`0002-realtime-kanban-via-socketio.md`](./docs/adr/0002-realtime-kanban-via-socketio.md) |
 
 ---

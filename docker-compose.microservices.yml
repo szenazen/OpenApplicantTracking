@@ -3,17 +3,15 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d
 #
-# Monolith (apps/api) on host :3001 — unchanged; use monolith mode by pointing
-# the browser at :3001 directly, or wire through BFF (microservices mode).
+# Backup API (apps/api) on host :3001 — for unmigrated routes only; primary edge
+# is web-bff :3080. Point the browser at :3001 only for monolith-backup mode.
 #
 #   export NEXT_PUBLIC_API_URL=http://localhost:3080
 #   export API_URL=http://localhost:3080
 #   pnpm --filter @oat/web dev
 #
-# Pipeline slice QA: BFF sets BFF_PIPELINES_TO_SLICE=1 → `/api/pipelines` hits pipeline-service
-# (not the monolith). Use the same JWT_SECRET in `.env` as in compose. Optional: run the monolith
-# without pipeline delegation, or with OAT_USE_PIPELINE_SLICE only when using :3001 without BFF
-# (see docs/qa-pipeline-slice.md).
+# Pipeline: BFF_PIPELINES_TO_SLICE=1 → `/api/pipelines` → pipeline-service (not apps/api).
+# Same JWT_SECRET in `.env` as compose. Run apps/api on :3001 only for backup routes (jobs, auth, …).
 #
 # See docs/deployment-modes.md
 
@@ -105,6 +103,7 @@ services:
     container_name: oat-web-bff
     restart: unless-stopped
     environment:
+      # Backup Nest app (apps/api) — unmigrated routes only; not the primary edge.
       MONOLITH_URL: http://host.docker.internal:3001
       ACCOUNT_SERVICE_URL: http://account-service:3010
       BFF_PORT: "3080"

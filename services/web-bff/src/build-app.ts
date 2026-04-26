@@ -36,6 +36,7 @@ function buildDestUrl(
 }
 
 export type BffOptions = {
+  /** Backup Nest API (`apps/api`) for unmigrated routes — not the primary edge. */
   monolithUrl: string;
   accountServiceUrl: string;
   /** Optional — when slice env flags route to these hosts */
@@ -54,9 +55,9 @@ const DEFAULTS: BffOptions = {
 };
 
 /**
- * Web BFF: single browser/API entry, routes to monolith (apps/api) or
- * extracted services per {@link resolveUpstream}. apps/* stay the modular
- * monolith reference; run the monolith directly (port 3001) for monolith mode.
+ * Web BFF: primary browser/API entry — services first, then backup `apps/api`
+ * per {@link resolveUpstream}. `MONOLITH_URL` points at the Nest backup, not
+ * the architectural center of gravity.
  */
 export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyInstance> {
   const o = { ...DEFAULTS, ...opts };

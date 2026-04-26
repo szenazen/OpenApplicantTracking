@@ -1,14 +1,12 @@
 # Microservices migration (strangler pattern)
 
-The original system design targets **separate deployable services** (Account & membership, RBAC, Pipeline, …). The main app remains a **modular monolith** at [`apps/api`](../apps/api) so day-to-day development is unchanged.
-
-This directory holds **extracted services** and the **Web BFF** that implement slices of the design. [`apps/api`](../apps/api) remains the **parallel modular monolith** (backup + day-to-day dev). Traffic is migrated gradually: the monolith keeps owning routes until the BFF forwards specific paths to a service.
+The original system design targets **separate deployable services** (Account & membership, RBAC, Pipeline, …). **Primary** integration is the **Web BFF** plus this directory’s services. [`apps/api`](../apps/api) is the **backup / reference** Nest monolith: it still serves **unmigrated** routes (auth, jobs, candidates, realtime, …) until those domains move behind the BFF.
 
 ## Current extracts
 
 | Service | Port (local) | Responsibility | Status |
 |--------|---------------|----------------|--------|
-| [`web-bff`](./web-bff) | `3080` | **Web BFF** (design: single browser/edge entry): routes account slice → account-service, default → monolith on host (`:3001`) | Default edge |
+| [`web-bff`](./web-bff) | `3080` | **Web BFF** (primary edge): account slice → `account-service`; pipelines → `pipeline-service` when configured; **else** → backup API [`apps/api`](../apps/api) on `:3001` | Default edge |
 | [`api-gateway`](./api-gateway) | (optional) | **Legacy** nginx: same routing rules in config; for comparison only — see [api-gateway/README.md](./api-gateway/README.md) | Optional |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
 | [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay). BFF can rewrite **`/api/pipelines`** → slice when `BFF_PIPELINES_TO_SLICE=1` ([../docs/qa-pipeline-slice.md](../docs/qa-pipeline-slice.md)). | Pilot extract |
@@ -25,7 +23,7 @@ Responses include `_service: "…"` on several handlers so callers can verify ro
 
 ## Unified API (local, prod-like) — recommended for microservice testing
 
-See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **Web BFF** at the edge, services behind it). The **Web BFF** ([`web-bff/`](./web-bff)) implements routing in code ([`web-bff/src/routing.ts`](./web-bff/src/routing.ts), tested): account strangler paths → `account-service`; everything else (including `POST /api/accounts`, jobs, candidates, `POST /api/platform/accounts`, `/realtime`) → the monolith on **:3001**. Rules stay aligned with the optional [nginx](api-gateway/nginx.conf) reference.
+See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **Web BFF** at the edge, services behind it). The **Web BFF** ([`web-bff/`](./web-bff)) implements routing in code ([`web-bff/src/routing.ts`](./web-bff/src/routing.ts), tested): extracted paths → services; **remaining** traffic (e.g. `POST /api/accounts`, jobs, candidates, `POST /api/platform/accounts`, `/realtime`) → **backup** [`apps/api`](../apps/api) on **:3001** until migrated. Rules stay aligned with the optional [nginx](api-gateway/nginx.conf) reference.
 
 1. **Infra + account-service + web-bff** (from repo root):
 
@@ -33,7 +31,7 @@ See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **
    docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build
    ```
 
-2. **Monolith on the host** (expects port 3001 — same as always):
+2. **Backup API on the host** (`apps/api`, port 3001) — required **today** for unmigrated routes:
 
    ```bash
    pnpm --filter @oat/api dev
@@ -47,9 +45,9 @@ See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **
    pnpm --filter @oat/web dev
    ```
 
-4. **Smoke the edge**: `curl -s http://localhost:3080/bff-health` and `curl -s http://localhost:3080/health` (monolith, once API is up).
+4. **Smoke the edge**: `curl -s http://localhost:3080/bff-health` and `curl -s http://localhost:3080/health` (proxied to backup API when it is running).
 
-**Production —** deploy the same path-based routing on your real edge (or run the BFF as a service); for compose-style URLs, set `MONOLITH_URL` / `ACCOUNT_SERVICE_URL` on the BFF instead of `host.docker.internal:3001` when the monolith is in-cluster. See [`web-bff/Dockerfile`](./web-bff/Dockerfile).
+**Production —** deploy the same path-based routing on your real edge (or run the BFF as a service); set `MONOLITH_URL` to wherever the **backup** `apps/api` (or its successor) listens when unmigrated routes still exist. See [`web-bff/Dockerfile`](./web-bff/Dockerfile).
 
 ## Local testing: Docker Compose (account-service only)
 
@@ -81,7 +79,7 @@ Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validat
 
 **Tests:** after `pnpm --filter @oat/api db:migrate` (shared global DB), run `pnpm --filter @oat/account-service db:generate && pnpm --filter @oat/account-service test` (unit, no DB) and `pnpm --filter @oat/account-service test:integration` (HTTP + Postgres). CI runs both in the `api-tests` job.
 
-**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`web-bff` (:3080)** and **`account-service` (:3010)**; the monolith still runs on the host.
+**Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`web-bff` (:3080)** and **`account-service` (:3010)**; the backup API typically still runs on the host until those routes are retired.
 
 **Web BFF tests:** `pnpm --filter @oat/web-bff test`
 

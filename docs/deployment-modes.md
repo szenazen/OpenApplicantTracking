@@ -1,41 +1,59 @@
-# Monolith mode vs microservices (edge) mode
+# Deployment modes: edge-first vs monolith backup
 
-`apps/api` and `apps/web` are unchanged: you can run the **monolith** alone, or add the **optional** Docker overlay for extracted services + **Web BFF**.
+**Product direction:** the **Web BFF** (`services/web-bff` on **:3080**) plus **extracted services** (account, pipeline, …) are the **primary** HTTP edge. The Nest app in **`apps/api`** (**:3001**) is the **backup / reference** implementation: use it for routes not yet owned by a slice, for OpenAPI during development, or when you want a single process without the compose overlay.
 
-## Monolith mode (default local dev)
+---
+
+## Edge mode (recommended local + prod-like)
+
+- **Base infra:** `docker compose up -d` (Postgres regions, **Redpanda**, Redis, …)
+- **Overlay:** `docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build`  
+  Brings up **web-bff** (:3080), **account-service**, **pipeline-service**, **auth-service** (placeholder), **kafka-ping**, etc.
+- **Backup API (`apps/api`):** run on the host only when you need **unmigrated** routes (auth, jobs, candidates, `/realtime`, `POST /api/accounts`, …):
+
+  ```bash
+  pnpm --filter @oat/api dev
+  ```
+
+  Point the BFF at it with `MONOLITH_URL` (default in compose: `http://host.docker.internal:3001`). As slices absorb more domains, reliance on this process **shrinks**.
+
+- **Browser:** `NEXT_PUBLIC_API_URL=http://localhost:3080` and `API_URL=http://localhost:3080` so all traffic goes through the BFF.
+
+The BFF routes **extracted** paths to services (e.g. account membership, `/api/pipelines` when `BFF_PIPELINES_TO_SLICE=1`) and **everything else** to the backup API until those routes move. **New** paths under `/api/slice/pipeline/*` and `/api/slice/auth/*` are slice-only when the BFF flags are on.
+
+- **Ops snapshot:** `GET http://localhost:3080/api/bff/aggregated-health` (BFF + account + optional pipeline DB + optional Kafka smoke + backup API when configured).
+
+Pipeline QA details: [qa-pipeline-slice.md](./qa-pipeline-slice.md).
+
+---
+
+## Monolith-only mode (backup / simplest single process)
+
+Use when you are **not** running the microservices overlay and want one API process only.
 
 - **API:** `pnpm --filter @oat/api dev` → **http://localhost:3001**
 - **Web:** `pnpm --filter @oat/web dev` → **http://localhost:3002** (or your `WEB_PORT`)
 - **Set:** `NEXT_PUBLIC_API_URL=http://localhost:3001` and `API_URL=http://localhost:3001` in `.env`
 
-The browser talks **directly** to the Nest monolith. No BFF, no account-service, no new slice paths. This matches a single deployable and is the backup path when microservices are not running.
+The browser talks **directly** to `apps/api`. No BFF, no account-service, no slice paths. This is the **backup** path for a single deployable or offline work without Docker services.
 
-## Microservices (edge) mode
-
-- **Base infra:** `docker compose up -d` (Postgres regions, **Redpanda**, Redis, …)
-- **Overlay:** `docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build`  
-  Brings up `account-service`, `pipeline-service` (own DB), `auth-service` (placeholder), `kafka-ping` (async smoke), and **`web-bff` on :3080**.
-- **Monolith** still on the **host** at :3001 — same codebase as monolith mode.
-- **Set:** `NEXT_PUBLIC_API_URL=http://localhost:3080` and `API_URL=http://localhost:3080` so the UI goes through the BFF.
-
-The BFF routes **existing** public paths to the monolith or `account-service` (strangler). **New** paths under `/api/slice/pipeline/*` and `/api/slice/auth/*` are only active when the BFF has `PIPELINE_SLICE_ENABLED` / `AUTH_SLICE_ENABLED` (set in the microservices compose file). Those paths are **not** implemented in `apps/api`, so the monolith never conflicts.
-
-- **Ops snapshot:** `GET http://localhost:3080/api/bff/aggregated-health` (BFF-aggregated checks of monolith, account, optional slices, optional Kafka smoke).
+---
 
 ## Choosing a mode
 
-| Concern | Monolith mode | Microservices mode |
-|--------|---------------|---------------------|
-| Simplest | Yes | No (more containers) |
-| Strangler + slices | No | Yes |
-| **apps/api** source edits | N/A (direct) | N/A (host process unchanged) |
+| Concern | Edge (BFF + slices) | Monolith-only (backup) |
+|--------|---------------------|-------------------------|
+| Matches target architecture | Yes | No |
+| Fewest moving parts | No | Yes |
+| Strangler + owned services | Yes | No |
+| **`apps/api` required** | Only for unmigrated routes | Always |
 
-### Optional: monolith delegates `/api/pipelines` to pipeline-service
+### Optional: backup API delegates `/api/pipelines` to pipeline-service
 
-By default, pipeline CRUD stays on **regional Prisma** inside `apps/api`. To point the same `/api/pipelines` routes at **pipeline-service** (without changing the web app or route paths), set on the monolith: `OAT_USE_PIPELINE_SLICE=true` and `PIPELINE_SLICE_BASE_URL` (e.g. `http://127.0.0.1:3030`). The monolith forwards `Authorization` and `x-account-id` to the slice. When this flag is off, behavior matches monolith-only mode.
+If you call **`apps/api` on :3001 directly** (no BFF) but still want pipeline CRUD in `pipeline-service`, set: `OAT_USE_PIPELINE_SLICE=true` and `PIPELINE_SLICE_BASE_URL` (e.g. `http://127.0.0.1:3030`). Prefer the BFF path when possible: `BFF_PIPELINES_TO_SLICE=1` + `PIPELINE_SERVICE_URL` so the backup API is not in the loop for pipelines ([qa-pipeline-slice.md](./qa-pipeline-slice.md)).
 
-**Web BFF mode (recommended for QA):** with `BFF_PIPELINES_TO_SLICE=true` and `PIPELINE_SERVICE_URL`, the BFF rewrites public `/api/pipelines` to the slice so the monolith is not used for those calls. See [qa-pipeline-slice.md](./qa-pipeline-slice.md).
+---
 
 ## Async events
 
-**Redpanda** (Kafka API) in `docker-compose.yml` is used by `kafka-ping` in the overlay to validate produce/consume. Future domain event publishers can use the same brokers without changing the monolith until you add optional hooks.
+**Redpanda** (Kafka API) in `docker-compose.yml` is used by `kafka-ping` in the overlay and by services that publish domain events (e.g. pipeline-service when `KAFKA_BROKERS` is set). This does not require routing through `apps/api`.

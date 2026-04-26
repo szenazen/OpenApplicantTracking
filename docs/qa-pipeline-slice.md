@@ -1,12 +1,12 @@
 # QA: pipeline slice (BFF + pipeline-service)
 
-This path lets you exercise **real** pipeline CRUD in `pipeline-service` (Postgres + optional Redpanda events) through the **same** browser routes the app already uses (`/api/pipelines`), without changing the Next.js client.
+This path exercises **real** pipeline CRUD in `pipeline-service` through the **same** browser routes (`/api/pipelines`). The **BFF is the primary edge**; `apps/api` is only needed for **other** API surface (jobs, auth, etc.) until those move to services.
 
 ## Prerequisites
 
-- **Same `JWT_SECRET`** everywhere: root `.env`, `apps/api` (monolith), and pipeline containers. The overlay `docker-compose.microservices.yml` injects `JWT_SECRET` into `account-service` and `pipeline-service`.
+- **Same `JWT_SECRET`** everywhere: root `.env`, backup API (`apps/api`) when you run it, and pipeline/account containers. The overlay `docker-compose.microservices.yml` injects `JWT_SECRET` into `account-service` and `pipeline-service`.
 - **Postgres** base stack: `docker compose up -d` (regions, global, Redis, Redpanda, …).
-- **API data** for your account: migrate + seed the monolith DBs as usual (`pnpm db:migrate`, `pnpm db:seed`).
+- **Regional/global data:** migrate + seed as usual (`pnpm db:migrate`, `pnpm db:seed`) — that tooling still lives on the backup API / shared DBs.
 
 ## One-command edge stack
 
@@ -24,17 +24,17 @@ With `BFF_PIPELINES_TO_SLICE=1` (set in the overlay for `web-bff`):
 - Requests to **`/api/pipelines`** are **rewritten** to `pipeline-service` at  
   `/api/slice/pipeline/accounts/{x-account-id}/pipelines…`
 - The browser still sends **`Authorization`** and **`x-account-id`**; the BFF forwards them.
-- **`/api/jobs` and all other routes** still go to the **monolith** on the host (`MONOLITH_URL`, default `http://host.docker.internal:3001`).
+- **`/api/jobs` and all other non-sliced routes** go to the **backup API** (`apps/api`, `MONOLITH_URL`, default `http://host.docker.internal:3001`).
 
-You **do not** need `OAT_USE_PIPELINE_SLICE` on the monolith when using this BFF mode (the monolith is not in the loop for `/api/pipelines`).
+You **do not** need `OAT_USE_PIPELINE_SLICE` on `apps/api` when using this BFF mode (pipelines never hit the backup API).
 
-### Run the monolith on the host
+### Run the backup API on the host (for jobs, auth, realtime, …)
 
 ```bash
 pnpm --filter @oat/api dev
 ```
 
-Keep `JWT_SECRET` in `.env` aligned with compose (or export the same value before `docker compose`).
+Keep `JWT_SECRET` in `.env` aligned with compose. When every route is behind a service, this step goes away.
 
 ### Point the web app at the BFF
 
@@ -68,9 +68,9 @@ pnpm --filter @oat/api drain:pipelines-to-slice
 
 Then use the UI with the BFF as above. **Backup** both databases before running in production-like environments.
 
-## Optional: monolith-only delegation (no BFF)
+## Optional: backup API-only delegation (no BFF)
 
-If the browser talks to **:3001** directly, set on the API process:
+If the browser talks to **`apps/api` on :3001** directly (no BFF), set:
 
 - `OAT_USE_PIPELINE_SLICE=true`
 - `PIPELINE_SLICE_BASE_URL=http://127.0.0.1:3030`
