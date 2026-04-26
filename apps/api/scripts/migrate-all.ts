@@ -1,7 +1,10 @@
 /**
- * Runs Prisma migrate deploy against:
+ * Runs Prisma against:
  *   - the global datasource (GLOBAL_DATABASE_URL)
  *   - every configured regional datasource (REGION_<CODE>_DATABASE_URL)
+ *
+ * Uses `db push` in non-production or when USE_PRISMA_DB_PUSH=1; otherwise
+ * `migrate deploy` (requires migration folders).
  *
  * Usage: `pnpm db:migrate`
  */
@@ -50,8 +53,12 @@ for (const t of targets) {
   } else {
     env.REGIONAL_DATABASE_URL = t.url;
   }
-  // In dev we use `migrate dev` to create migrations; CI/prod uses `migrate deploy`.
-  const cmd = process.env.NODE_ENV === 'production' ? 'migrate deploy' : 'db push';
+  // Default: `db push` in non-production; `migrate deploy` in production.
+  // Set USE_PRISMA_DB_PUSH=1 (e.g. backup-api container) to force `db push` when
+  // migration history is not yet checked in for all schemas.
+  const usePush =
+    process.env.USE_PRISMA_DB_PUSH === '1' || process.env.NODE_ENV !== 'production';
+  const cmd = usePush ? 'db push' : 'migrate deploy';
   execSync(`npx prisma ${cmd} --schema "${t.schema}"`, { stdio: 'inherit', env, cwd: root });
 }
 

@@ -31,11 +31,9 @@ See [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) (single **
    docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build
    ```
 
-2. **Backup API on the host** (`apps/api`, port 3001) — required **today** for unmigrated routes:
-
-   ```bash
-   pnpm --filter @oat/api dev
-   ```
+2. **Backup API** — with the compose overlay, **`backup-api`** (image from `apps/api/Dockerfile`) runs in Docker; BFF uses `http://backup-api:3001`. Host: **http://localhost:3101** for Swagger. First time:  
+   `docker compose -f docker-compose.yml -f docker-compose.microservices.yml exec backup-api pnpm exec tsx scripts/seed.ts`  
+   Or run on the host only: `pnpm --filter @oat/api dev` (:3001) and set BFF `MONOLITH_URL=http://host.docker.internal:3001` (stop `backup-api` to avoid port clashes if you publish 3001).
 
 3. **Point the web app at the BFF** (single `NEXT_PUBLIC_API_URL`):
 

@@ -9,13 +9,9 @@
 - **Base infra:** `docker compose up -d` (Postgres regions, **Redpanda**, Redis, …)
 - **Overlay:** `docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build`  
   Brings up **web-bff** (:3080), **account-service**, **pipeline-service**, **auth-service** (placeholder), **kafka-ping**, etc.
-- **Backup API (`apps/api`):** run on the host only when you need **unmigrated** routes (auth, jobs, candidates, `/realtime`, `POST /api/accounts`, …):
-
-  ```bash
-  pnpm --filter @oat/api dev
-  ```
-
-  Point the BFF at it with `MONOLITH_URL` (default in compose: `http://host.docker.internal:3001`). As slices absorb more domains, reliance on this process **shrinks**.
+- **Backup API (`apps/api`):** in the microservices compose overlay this runs as **`backup-api`** on the Docker network (`MONOLITH_URL=http://backup-api:3001` for `web-bff`). Host port **3101** → container **3001** (Swagger: `http://localhost:3101/api/docs`). On first boot the image runs **`migrate-all`** with `USE_PRISMA_DB_PUSH=1` (schema sync without checked-in migration folders). Seed demo data once:  
+  `docker compose -f docker-compose.yml -f docker-compose.microservices.yml exec backup-api pnpm exec tsx scripts/seed.ts`  
+  To use a **host** process on :3001 instead, stop `backup-api` and set `MONOLITH_URL=http://host.docker.internal:3001` on `web-bff` (and restore `extra_hosts` if needed on Linux).
 
 - **Browser:** `NEXT_PUBLIC_API_URL=http://localhost:3080` and `API_URL=http://localhost:3080` so all traffic goes through the BFF.
 

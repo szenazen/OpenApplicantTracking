@@ -4,9 +4,11 @@ This path exercises **real** pipeline CRUD in `pipeline-service` through the **s
 
 ## Prerequisites
 
-- **Same `JWT_SECRET`** everywhere: root `.env`, backup API (`apps/api`) when you run it, and pipeline/account containers. The overlay `docker-compose.microservices.yml` injects `JWT_SECRET` into `account-service` and `pipeline-service`.
+- **Same `JWT_SECRET`** everywhere (compose reads `.env`). The overlay runs **`backup-api`** (`apps/api` in Docker) plus `account-service` and `pipeline-service`.
 - **Postgres** base stack: `docker compose up -d` (regions, global, Redis, Redpanda, …).
-- **Regional/global data:** migrate + seed as usual (`pnpm db:migrate`, `pnpm db:seed`) — that tooling still lives on the backup API / shared DBs.
+- **First-time overlay:** after `pnpm compose:gateway`, run  
+  `docker compose -f docker-compose.yml -f docker-compose.microservices.yml exec backup-api pnpm exec tsx scripts/seed.ts`  
+  (migrations run automatically on container start). For host-only API dev, use `pnpm db:migrate` / `pnpm db:seed` as before.
 
 ## One-command edge stack
 
@@ -28,13 +30,11 @@ With `BFF_PIPELINES_TO_SLICE=1` (set in the overlay for `web-bff`):
 
 You **do not** need `OAT_USE_PIPELINE_SLICE` on `apps/api` when using this BFF mode (pipelines never hit the backup API).
 
-### Run the backup API on the host (for jobs, auth, realtime, …)
+### Backup API (jobs, auth, realtime, …)
 
-```bash
-pnpm --filter @oat/api dev
-```
+With compose, **`backup-api`** already serves these routes; no host process required. Direct access: **http://localhost:3101** (OpenAPI `/api/docs`). The BFF uses **http://backup-api:3001** internally.
 
-Keep `JWT_SECRET` in `.env` aligned with compose. When every route is behind a service, this step goes away.
+Optional: run on the host instead — `pnpm --filter @oat/api dev` on :3001, stop the `backup-api` container, point BFF `MONOLITH_URL` at `http://host.docker.internal:3001`.
 
 ### Point the web app at the BFF
 
