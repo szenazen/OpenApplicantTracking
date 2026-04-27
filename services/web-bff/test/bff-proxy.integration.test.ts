@@ -91,4 +91,31 @@ describe('Web BFF proxy (integration)', () => {
       pipeline.close();
     }
   });
+
+  it('returns 400 for /api/pipelines without x-account-id when BFF_PIPELINES_TO_SLICE', async () => {
+    process.env.BFF_PIPELINES_TO_SLICE = '1';
+    const pipeline = createServer(() => {
+      /* should not be called */
+    });
+    const pPort = await listen(pipeline);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      pipelineServiceUrl: `http://127.0.0.1:${pPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${bffAddr.port}`;
+
+    try {
+      const r = await fetch(`${base}/api/pipelines`);
+      expect(r.status).toBe(400);
+      const j = (await r.json()) as { error?: string };
+      expect(j.error).toContain('x-account-id');
+    } finally {
+      await app.close();
+      pipeline.close();
+    }
+  });
 });

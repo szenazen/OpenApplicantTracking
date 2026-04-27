@@ -11,15 +11,15 @@ describe('resolvePrismaMigrateCmd', () => {
     expect(resolvePrismaMigrateCmd({ NODE_ENV: 'production' })).toBe('migrate deploy');
   });
 
-  it('uses db push in production when USE_PRISMA_DB_PUSH=1', () => {
+  it('uses db push in production when USE_PRISMA_DB_PUSH=1 or true', () => {
     expect(
       resolvePrismaMigrateCmd({ NODE_ENV: 'production', USE_PRISMA_DB_PUSH: '1' }),
     ).toBe('db push');
-  });
-
-  it('does not treat USE_PRISMA_DB_PUSH=true as force-push (only "1")', () => {
     expect(
       resolvePrismaMigrateCmd({ NODE_ENV: 'production', USE_PRISMA_DB_PUSH: 'true' }),
-    ).toBe('migrate deploy');
+    ).toBe('db push');
+    expect(
+      resolvePrismaMigrateCmd({ NODE_ENV: 'production', USE_PRISMA_DB_PUSH: 'TRUE' }),
+    ).toBe('db push');
   });
 });

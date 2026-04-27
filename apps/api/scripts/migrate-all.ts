@@ -3,7 +3,7 @@
  *   - the global datasource (GLOBAL_DATABASE_URL)
  *   - every configured regional datasource (REGION_<CODE>_DATABASE_URL)
  *
- * Uses `db push` in non-production or when USE_PRISMA_DB_PUSH=1; otherwise
+ * Uses `db push` in non-production or when USE_PRISMA_DB_PUSH is 1/true; otherwise
  * `migrate deploy` (requires migration folders).
  *
  * Usage: `pnpm db:migrate`
