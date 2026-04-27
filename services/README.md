@@ -6,10 +6,10 @@ The original system design targets **separate deployable services** (Account & m
 
 | Service | Port (local) | Responsibility | Status |
 |--------|---------------|----------------|--------|
-| [`web-bff`](./web-bff) | `3080` | **Web BFF** (primary edge): account slice → `account-service`; pipelines → `pipeline-service` when configured; **else** → backup API [`apps/api`](../apps/api) on `:3001` | Default edge |
+| [`web-bff`](./web-bff) | `3080` | **Web BFF** (primary edge): account slice → `account-service`; **`/api/pipelines`** and **`GET /api/jobs`** → `pipeline-service` when `BFF_PIPELINES_TO_SLICE` / `BFF_JOBS_TO_SLICE`; **else** → backup API [`apps/api`](../apps/api) on `:3001`. Aligns with **single Web BFF** in [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) — see [`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md) for gaps. | Default edge |
 | [`api-gateway`](./api-gateway) | (optional) | **Legacy** nginx: same routing rules in config; for comparison only — see [api-gateway/README.md](./api-gateway/README.md) | Optional |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
-| [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay). BFF can rewrite **`/api/pipelines`** → slice when `BFF_PIPELINES_TO_SLICE=1` ([../docs/qa-pipeline-slice.md](../docs/qa-pipeline-slice.md)). | Pilot extract |
+| [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay). Pipelines CRUD + **pilot** minimal jobs + `GET` jobs index. BFF: `BFF_PIPELINES_TO_SLICE`, `BFF_JOBS_TO_SLICE` ([../docs/qa-pipeline-slice.md](../docs/qa-pipeline-slice.md)). Target diagram separates **Job Service** vs **Pipeline Service** — we are **pilot-combined** ([`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md)). | Pilot extract |
 | [`auth-service`](./auth-service) | `3020` | New paths `/api/slice/auth/*` (BFF flag); no shared DB; future token/MFA | Pilot extract |
 | [`kafka-ping`](./kafka-ping) | `3040` | Produce/consume on Redpanda (Kafka API) for async path smoke | Dev / wiring |
 
@@ -102,6 +102,6 @@ See [`k8s/local/README.md`](./k8s/local/README.md) for manifests and limitations
 ## Roadmap (suggested order)
 
 1. **Web BFF** + account reads/invites/members + `GET /platform/accounts` → next: more extracted services or `POST /platform/accounts` when a dedicated provisioning service exists.
-2. Pipeline service (regional DB) behind router.
+2. Expand **pipeline-service** (or split **Job Service** per diagram) until regional job/Kanban live in owned stores; keep **Web BFF** as the path router ([`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md)).
 3. **Socket.IO:** add Redis adapter + separate realtime deployment (see `docs/adr/0002-realtime-kanban-via-socketio.md`).
 4. Async domain events via existing Redpanda in `docker-compose.yml`.

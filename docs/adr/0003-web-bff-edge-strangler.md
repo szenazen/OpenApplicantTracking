@@ -23,3 +23,4 @@ The first production-like edge in Compose was an **nginx** reverse proxy (`servi
 - **Positive:** `apps/api` remains a **backup** and contract reference without requiring a second duplicate stack; the **edge** is the default integration surface.
 - **Negative:** Operations must run the BFF (Node) where before some teams might have run only nginx; resource profile is similar for local dev.
 - **Follow-up:** Further extractions (Pipeline, Auth, etc.) add upstreams; `routing.ts` and tests grow. Async events (e.g. Kafka) remain a separate track from the HTTP edge.
+- **Tracking:** [design/strangler-vs-ats-diagram.md](../../design/strangler-vs-ats-diagram.md) maps the diagram to the repo (aligned vs pilot gaps).

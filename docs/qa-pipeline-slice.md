@@ -26,7 +26,14 @@ With `BFF_PIPELINES_TO_SLICE=1` (set in the overlay for `web-bff`):
 - Requests to **`/api/pipelines`** are **rewritten** to `pipeline-service` at  
   `/api/slice/pipeline/accounts/{x-account-id}/pipelines…`
 - The browser still sends **`Authorization`** and **`x-account-id`**; the BFF forwards them.
-- **`/api/jobs` and all other non-sliced routes** go to the **backup API** (`apps/api`, `MONOLITH_URL`, default `http://host.docker.internal:3001`).
+
+With **`BFF_JOBS_TO_SLICE=1`** (also set in `docker-compose.microservices.yml` for `web-bff`):
+
+- **`GET /api/jobs`** (paginated index only) is rewritten to  
+  `/api/slice/pipeline/accounts/{x-account-id}/jobs?…` on `pipeline-service`.
+- **`GET /api/jobs/:id`**, **`POST /api/jobs`**, **`PATCH /api/jobs/:id`**, and all other routes still go to the **backup API** until the slice stores full job + Kanban data.
+
+Any **non-sliced** traffic continues to **`apps/api`** (`MONOLITH_URL`, default `http://host.docker.internal:3001`).
 
 You **do not** need `OAT_USE_PIPELINE_SLICE` on `apps/api` when using this BFF mode (pipelines never hit the backup API).
 
@@ -77,15 +84,16 @@ If the browser talks to **`apps/api` on :3001** directly (no BFF), set:
 
 ## Jobs / “matching” routes
 
-- **Jobs** remain on the **monolith** (`/api/jobs`). The slice stores a **minimal** job row for pipeline invariants (e.g. stage delete rules); the **drain script** copies that subset.
-- There is **no** separate BFF “matching” route: routing is by prefix (`/api/pipelines` → slice when `BFF_PIPELINES_TO_SLICE` is on; everything else default rules).
+- **Slice:** **`GET /api/jobs`** can be served from **`pipeline-service`** when `BFF_JOBS_TO_SLICE=1` (same list shape as the monolith for table views; minimal job rows + application counts). **Detail and mutations** stay on **`apps/api`**.
+- The slice stores **minimal** job rows for pipeline invariants; the **drain script** copies that subset from the regional DB.
+- **Diagram alignment:** The target drawing has a dedicated **Job Service** separate from **Pipeline Service**; today they are **combined in the pilot** — see [`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md).
 
 ## Troubleshooting
 
 | Symptom | Check |
 |--------|--------|
 | 401 on `/api/pipelines` | `JWT_SECRET` matches token issuer (monolith) and pipeline-service |
-| 400 `x-account-id` | Browser sends account header; BFF public pipeline mode requires it |
+| 400 `x-account-id` | Browser sends account header; BFF requires it when rewriting `/api/pipelines` or **`GET /api/jobs`** to the slice |
 | Monolith not reached | BFF `MONOLITH_URL` and `host.docker.internal` (Linux: add `extra_hosts` if needed) |
 | Empty pipelines after drain | `ACCOUNT_ID`, `REGIONAL_SOURCE_URL` point at the right region DB |
 

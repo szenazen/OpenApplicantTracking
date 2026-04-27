@@ -5,7 +5,7 @@ import { bffPipelinesToSliceEnabled, isPublicPipelinesPath } from './pipeline-pu
  * Resolves which upstream the Web BFF should use for a request.
  * **Primary:** extracted services (account, pipeline, auth, …). **Backup:**
  * `apps/api` at `MONOLITH_URL` — Nest modular monolith for routes not yet owned
- * by a slice (see design/ATS-design.drawio.xml).
+ * by a slice (see design/ATS-design.drawio.xml and design/strangler-vs-ats-diagram.md).
  *
  * The identifier `monolith` in {@link UpstreamKind} means that backup API, not
  * “center of architecture.”
