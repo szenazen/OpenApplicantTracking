@@ -17,7 +17,9 @@ export function isPublicPipelinesPath(pathname: string): boolean {
  * @param requestUrl e.g. `/api/pipelines` or `/api/pipelines/x/statuses/reorder?a=1`
  */
 export function rewritePipelinesToSlicePath(requestUrl: string, accountId: string): string {
-  const [pathPart, ...queryParts] = requestUrl.split('?');
+  const parts = requestUrl.split('?');
+  const pathPart = parts[0] ?? '';
+  const queryParts = parts.slice(1);
   const q = queryParts.length ? `?${queryParts.join('?')}` : '';
   if (!isPublicPipelinesPath(pathPart)) {
     throw new Error(`Not a /api/pipelines path: ${pathPart}`);

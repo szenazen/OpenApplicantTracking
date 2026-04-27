@@ -4,11 +4,13 @@ describe('resolveUpstream', () => {
   const oldPipeline = process.env.PIPELINE_SLICE_ENABLED;
   const oldAuth = process.env.AUTH_SLICE_ENABLED;
   const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
+  const oldBffJobs = process.env.BFF_JOBS_TO_SLICE;
 
   afterEach(() => {
     process.env.PIPELINE_SLICE_ENABLED = oldPipeline;
     process.env.AUTH_SLICE_ENABLED = oldAuth;
     process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
+    process.env.BFF_JOBS_TO_SLICE = oldBffJobs;
   });
 
   it('health is self', () => {
@@ -53,6 +55,20 @@ describe('resolveUpstream', () => {
   it('default API to monolith', () => {
     expect(resolveUpstream('GET', '/api/jobs')).toBe('monolith');
     expect(resolveUpstream('GET', '/health')).toBe('monolith');
+  });
+
+  it('BFF forwards GET /api/jobs to pipeline when BFF_JOBS_TO_SLICE set', () => {
+    process.env.BFF_JOBS_TO_SLICE = '1';
+    expect(resolveUpstream('GET', '/api/jobs')).toBe('pipeline');
+    expect(resolveUpstream('GET', '/api/jobs?q=x')).toBe('pipeline');
+    process.env.BFF_JOBS_TO_SLICE = '0';
+    expect(resolveUpstream('GET', '/api/jobs')).toBe('monolith');
+  });
+
+  it('POST /api/jobs stays on monolith even when BFF_JOBS_TO_SLICE', () => {
+    process.env.BFF_JOBS_TO_SLICE = '1';
+    expect(resolveUpstream('POST', '/api/jobs')).toBe('monolith');
+    expect(resolveUpstream('GET', '/api/jobs/abc')).toBe('monolith');
   });
 
   it('preserves query string in path split', () => {

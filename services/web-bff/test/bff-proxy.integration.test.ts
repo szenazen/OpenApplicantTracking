@@ -15,8 +15,10 @@ function listen(server: ReturnType<typeof createServer>): Promise<number> {
 
 describe('Web BFF proxy (integration)', () => {
   const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
+  const oldBffJobs = process.env.BFF_JOBS_TO_SLICE;
   afterEach(() => {
     process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
+    process.env.BFF_JOBS_TO_SLICE = oldBffJobs;
   });
 
   it('routes invitations to account upstream and jobs to monolith', async () => {
@@ -110,6 +112,64 @@ describe('Web BFF proxy (integration)', () => {
 
     try {
       const r = await fetch(`${base}/api/pipelines`);
+      expect(r.status).toBe(400);
+      const j = (await r.json()) as { error?: string };
+      expect(j.error).toContain('x-account-id');
+    } finally {
+      await app.close();
+      pipeline.close();
+    }
+  });
+
+  it('rewrites GET /api/jobs to slice when BFF_JOBS_TO_SLICE', async () => {
+    process.env.BFF_JOBS_TO_SLICE = '1';
+    const pipeline = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url ?? '' }));
+    });
+    const pPort = await listen(pipeline);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      pipelineServiceUrl: `http://127.0.0.1:${pPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const bffPort = bffAddr.port;
+    const base = `http://127.0.0.1:${bffPort}`;
+
+    try {
+      const r = await fetch(`${base}/api/jobs?limit=5`, {
+        headers: { 'x-account-id': 'acc-job' },
+      });
+      expect(r.ok).toBe(true);
+      const j = (await r.json()) as { path: string };
+      expect(j.path).toBe('/api/slice/pipeline/accounts/acc-job/jobs?limit=5');
+    } finally {
+      await app.close();
+      pipeline.close();
+    }
+  });
+
+  it('returns 400 for GET /api/jobs without x-account-id when BFF_JOBS_TO_SLICE', async () => {
+    process.env.BFF_JOBS_TO_SLICE = '1';
+    const pipeline = createServer(() => {
+      /* should not be called */
+    });
+    const pPort = await listen(pipeline);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      pipelineServiceUrl: `http://127.0.0.1:${pPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${bffAddr.port}`;
+
+    try {
+      const r = await fetch(`${base}/api/jobs`);
       expect(r.status).toBe(400);
       const j = (await r.json()) as { error?: string };
       expect(j.error).toContain('x-account-id');

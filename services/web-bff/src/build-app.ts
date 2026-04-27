@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import replyFrom from '@fastify/reply-from';
 
 import { buildAggregatedHealth } from './aggregated-health';
+import { bffJobsToSliceEnabled, isPublicJobsListPath, rewriteJobsListToSlicePath } from './job-public-rewrite';
 import { bffPipelinesToSliceEnabled, isPublicPipelinesPath, rewritePipelinesToSlicePath } from './pipeline-public-rewrite';
 import { resolveUpstream, type UpstreamKind } from './routing';
 
@@ -105,14 +106,29 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
     if (kind === 'auth' && !auth) {
       return reply.status(503).send({ error: 'Auth slice not configured (set AUTH_SERVICE_URL)' });
     }
+    const pathOnly = (request.url.split('?')[0] ?? '').split('#')[0] ?? '';
+    const method = request.method.toUpperCase();
     let dest: string;
-    if (kind === 'pipeline' && pipeline && bffPipelinesToSliceEnabled() && isPublicPipelinesPath((request.url.split('?')[0] ?? '').split('#')[0] ?? '')) {
+    if (kind === 'pipeline' && pipeline && bffPipelinesToSliceEnabled() && isPublicPipelinesPath(pathOnly)) {
       const acc = request.headers['x-account-id'];
       const accountId = Array.isArray(acc) ? acc[0] : acc;
       if (!accountId || typeof accountId !== 'string') {
         return reply.status(400).send({ error: 'x-account-id header required for pipeline routes' });
       }
       dest = new URL(rewritePipelinesToSlicePath(request.url, accountId), `${pipeline}/`).toString();
+    } else if (
+      kind === 'pipeline' &&
+      pipeline &&
+      bffJobsToSliceEnabled() &&
+      method === 'GET' &&
+      isPublicJobsListPath(pathOnly)
+    ) {
+      const acc = request.headers['x-account-id'];
+      const accountId = Array.isArray(acc) ? acc[0] : acc;
+      if (!accountId || typeof accountId !== 'string') {
+        return reply.status(400).send({ error: 'x-account-id header required for jobs list routes' });
+      }
+      dest = new URL(rewriteJobsListToSlicePath(request.url, accountId), `${pipeline}/`).toString();
     } else {
       dest = buildDestUrl(
         request,
