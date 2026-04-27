@@ -48,6 +48,8 @@ jobs:
       - run: pnpm --filter @oat/pipeline-service db:generate
       - run: pnpm -r --if-present lint
       - run: pnpm -r --if-present typecheck
+      - name: Docker build backup-api image
+        run: docker build -f apps/api/Dockerfile .
 
   api-tests:
     runs-on: ubuntu-latest

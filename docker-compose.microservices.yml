@@ -59,6 +59,18 @@ services:
       <<: *backup-api-env
     ports:
       - "3101:3001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
     depends_on:
       global-pg:
         condition: service_healthy
@@ -177,11 +189,16 @@ services:
     ports:
       - "3080:3080"
     depends_on:
-      - backup-api
-      - account-service
-      - pipeline-service
-      - auth-service
-      - kafka-ping
+      backup-api:
+        condition: service_healthy
+      account-service:
+        condition: service_started
+      pipeline-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      kafka-ping:
+        condition: service_started
 
 volumes:
   pipeline_slice_data:
