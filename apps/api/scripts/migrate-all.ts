@@ -12,6 +12,8 @@ import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { resolvePrismaMigrateCmd } from './migrate-all-resolve-cmd';
+
 type Target = { label: string; schema: string; url: string };
 
 const root = resolve(__dirname, '..');
@@ -53,12 +55,7 @@ for (const t of targets) {
   } else {
     env.REGIONAL_DATABASE_URL = t.url;
   }
-  // Default: `db push` in non-production; `migrate deploy` in production.
-  // Set USE_PRISMA_DB_PUSH=1 (e.g. backup-api container) to force `db push` when
-  // migration history is not yet checked in for all schemas.
-  const usePush =
-    process.env.USE_PRISMA_DB_PUSH === '1' || process.env.NODE_ENV !== 'production';
-  const cmd = usePush ? 'db push' : 'migrate deploy';
+  const cmd = resolvePrismaMigrateCmd(process.env);
   execSync(`npx prisma ${cmd} --schema "${t.schema}"`, { stdio: 'inherit', env, cwd: root });
 }
 
