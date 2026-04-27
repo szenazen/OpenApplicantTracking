@@ -1,13 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { StatusCategory } from '../generated/pipeline';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../domain-events/domain-events.service';
-
-function mapCategory(s?: string): StatusCategory {
-  if (!s) return StatusCategory.IN_PROGRESS;
-  if (s in StatusCategory) return s as StatusCategory;
-  return StatusCategory.IN_PROGRESS;
-}
+import { mapStatusCategory } from './map-status-category';
 
 @Injectable()
 export class PipelineDomainService {
@@ -47,7 +41,7 @@ export class PipelineDomainService {
             name: s.name,
             position: i,
             color: s.color,
-            category: mapCategory(s.category),
+            category: mapStatusCategory(s.category),
           })),
         },
       },
@@ -79,7 +73,7 @@ export class PipelineDomainService {
         pipelineId,
         name: input.name,
         color: input.color,
-        category: mapCategory(input.category),
+        category: mapStatusCategory(input.category),
         position,
       },
     });
