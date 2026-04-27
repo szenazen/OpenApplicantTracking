@@ -8,7 +8,7 @@
  *   ACCOUNT_ID="cuid" pnpm --filter @oat/api exec tsx scripts/drain-pipelines-to-slice.ts
  *
  * Order: clear slice rows for the account, then insert pipelines, statuses, jobs, applications.
- * Jobs are reduced to the minimal slice model (title, status, pipelineId, headCount).
+ * Jobs include list/search fields aligned with `apps/api` regional `Job` (slice schema parity).
  */
 
 import { PrismaClient as Regional } from '.prisma/regional';
@@ -71,17 +71,35 @@ async function main() {
         id: j.id,
         accountId: j.accountId,
         title: j.title,
+        description: j.description,
+        department: j.department,
+        location: j.location,
+        clientName: j.clientName,
+        headCount: j.headCount,
+        employmentType: j.employmentType,
         status: j.status,
         pipelineId: j.pipelineId,
-        headCount: j.headCount,
+        requiredSkillIds: j.requiredSkillIds,
+        ownerId: j.ownerId,
+        openedAt: j.openedAt,
+        closedAt: j.closedAt,
         createdAt: j.createdAt,
         updatedAt: j.updatedAt,
       },
       update: {
         title: j.title,
+        description: j.description,
+        department: j.department,
+        location: j.location,
+        clientName: j.clientName,
+        headCount: j.headCount,
+        employmentType: j.employmentType,
         status: j.status,
         pipelineId: j.pipelineId,
-        headCount: j.headCount,
+        requiredSkillIds: j.requiredSkillIds,
+        ownerId: j.ownerId,
+        openedAt: j.openedAt,
+        closedAt: j.closedAt,
         updatedAt: j.updatedAt,
       },
     });

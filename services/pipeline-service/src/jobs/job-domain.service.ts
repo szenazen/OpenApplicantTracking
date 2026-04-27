@@ -54,7 +54,12 @@ export class JobDomainService {
 
     if (q) {
       andClauses.push({
-        title: { contains: q, mode: 'insensitive' },
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { department: { contains: q, mode: 'insensitive' } },
+          { location: { contains: q, mode: 'insensitive' } },
+          { clientName: { contains: q, mode: 'insensitive' } },
+        ],
       });
     }
 
@@ -106,20 +111,20 @@ export class JobDomainService {
     const items = page.map((j) => ({
       id: j.id,
       title: j.title,
-      description: null as string | null,
-      department: null as string | null,
-      location: null as string | null,
-      clientName: null as string | null,
+      description: j.description,
+      department: j.department,
+      location: j.location,
+      clientName: j.clientName,
       headCount: j.headCount,
-      employmentType: null as string | null,
+      employmentType: j.employmentType,
       status: j.status,
       pipelineId: j.pipelineId,
-      requiredSkillIds: [] as string[],
-      openedAt: null as string | null,
-      closedAt: null as string | null,
+      requiredSkillIds: j.requiredSkillIds,
+      openedAt: j.openedAt,
+      closedAt: j.closedAt,
       createdAt: j.createdAt,
       owner: null as null,
-      ownerId: null as string | null,
+      ownerId: j.ownerId,
       candidateCounts: {
         total: totalByJob.get(j.id) ?? 0,
         active: activeByJob.get(j.id) ?? 0,

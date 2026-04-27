@@ -75,6 +75,8 @@ pnpm --filter @oat/api drain:pipelines-to-slice
 
 Then use the UI with the BFF as above. **Backup** both databases before running in production-like environments.
 
+Re-run the drain after **slice `Job` schema** changes if you need new columns (e.g. department / client for search) populated from regional data.
+
 ## Optional: backup API-only delegation (no BFF)
 
 If the browser talks to **`apps/api` on :3001** directly (no BFF), set:

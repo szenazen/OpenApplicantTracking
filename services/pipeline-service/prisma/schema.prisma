@@ -54,14 +54,23 @@ enum StatusCategory {
   DROPPED
 }
 
-/// Minimal job rows in the slice store (strangler target for job+pipeline data).
+/// Job rows in the slice store — fields aligned with `apps/api` regional `Job` for list/search parity after drain.
 model Job {
   id         String   @id @default(cuid())
   accountId  String
   title      String
+  description     String?
+  department      String?
+  location        String?
+  clientName      String?
+  headCount       Int         @default(1)
+  employmentType  EmploymentType @default(FULL_TIME)
   status     JobStatus   @default(DRAFT)
   pipelineId String
-  headCount  Int         @default(1)
+  requiredSkillIds String[] @default([])
+  ownerId         String?
+  openedAt        DateTime?
+  closedAt        DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -70,7 +79,16 @@ model Job {
 
   @@index([accountId, status])
   @@index([pipelineId])
+  @@index([accountId, ownerId])
   @@map("jobs")
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
 }
 
 enum JobStatus {
