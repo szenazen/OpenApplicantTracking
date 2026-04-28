@@ -99,18 +99,47 @@ enum JobStatus {
   ARCHIVED
 }
 
-/// In-slice application stub — enforces “no cards on stage” before status delete (monolith parity).
-model Application {
+/// Candidate rows for in-slice Kanban (aligned with regional `Candidate` fields used on cards).
+model Candidate {
   id              String   @id @default(cuid())
   accountId       String
-  currentStatusId String
-  jobId           String
+  firstName       String
+  lastName        String
+  email           String?
+  headline        String?
+  location        String?
+  currentCompany  String?
+  currentTitle    String?
+  yearsExperience Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  currentStatus PipelineStatus @relation(fields: [currentStatusId], references: [id], onDelete: Restrict)
-  job            Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applications Application[]
 
+  @@index([accountId])
+  @@map("candidates")
+}
+
+/// Application + candidate — Kanban card payload after drain (comments/reactions still monolith-only).
+model Application {
+  id                 String   @id @default(cuid())
+  accountId          String
+  candidateId        String
+  jobId              String
+  currentStatusId    String
+  position           Int      @default(0)
+  version            Int      @default(0)
+  appliedAt          DateTime @default(now())
+  lastTransitionAt   DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  candidate       Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  currentStatus   PipelineStatus @relation(fields: [currentStatusId], references: [id], onDelete: Restrict)
+  job             Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, jobId])
+  @@index([jobId, currentStatusId, position])
   @@index([currentStatusId])
   @@index([accountId, jobId])
   @@map("applications")

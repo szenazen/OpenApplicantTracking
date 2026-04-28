@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../generated/pipeline';
+import { AccountServiceClient } from '../integrations/account-service.client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const JOB_STATUSES = ['DRAFT', 'PUBLISHED', 'ON_HOLD', 'CLOSED', 'ARCHIVED'] as const;
@@ -13,15 +14,20 @@ export interface ListJobsQuery {
   cursor?: string;
 }
 
+export type JobRequestContext = { authorization?: string };
+
 @Injectable()
 export class JobDomainService {
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    private readonly accounts: AccountServiceClient,
+  ) {}
 
   /**
    * Paginated job list — shape aligned with `GET /api/jobs` on the monolith.
-   * Slice rows are minimal; fields not in the slice DB are returned as null / [].
+   * Owner chips resolved via account-service for active members only.
    */
-  async list(accountId: string, query: ListJobsQuery = {}) {
+  async list(accountId: string, query: ListJobsQuery = {}, ctx: JobRequestContext = {}) {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
     const q = query.q?.trim() ?? '';
 
@@ -108,40 +114,48 @@ export class JobDomainService {
     const totalByJob = new Map(counts.map((c) => [c.jobId, c._count._all] as const));
     const activeByJob = new Map(activeCounts.map((c) => [c.jobId, c._count._all] as const));
 
-    const items = page.map((j) => ({
-      id: j.id,
-      title: j.title,
-      description: j.description,
-      department: j.department,
-      location: j.location,
-      clientName: j.clientName,
-      headCount: j.headCount,
-      employmentType: j.employmentType,
-      status: j.status,
-      pipelineId: j.pipelineId,
-      requiredSkillIds: j.requiredSkillIds,
-      openedAt: j.openedAt,
-      closedAt: j.closedAt,
-      createdAt: j.createdAt,
-      owner: null as null,
-      ownerId: j.ownerId,
-      candidateCounts: {
-        total: totalByJob.get(j.id) ?? 0,
-        active: activeByJob.get(j.id) ?? 0,
-      },
-      pipeline: {
-        id: j.pipeline.id,
-        name: j.pipeline.name,
-        isDefault: j.pipeline.isDefault,
-        statuses: j.pipeline.statuses.map((s) => ({
-          id: s.id,
-          name: s.name,
-          position: s.position,
-          category: s.category,
-          color: s.color,
-        })),
-      },
-    }));
+    const ownerIdList = [...new Set(page.map((j) => j.ownerId).filter((id): id is string => Boolean(id)))];
+    const owners = await this.accounts.resolveMemberProfiles(accountId, ownerIdList, ctx.authorization);
+
+    const items = page.map((j) => {
+      const o = j.ownerId ? owners.get(j.ownerId) : undefined;
+      return {
+        id: j.id,
+        title: j.title,
+        description: j.description,
+        department: j.department,
+        location: j.location,
+        clientName: j.clientName,
+        headCount: j.headCount,
+        employmentType: j.employmentType,
+        status: j.status,
+        pipelineId: j.pipelineId,
+        requiredSkillIds: j.requiredSkillIds,
+        openedAt: j.openedAt,
+        closedAt: j.closedAt,
+        createdAt: j.createdAt,
+        owner: o
+          ? { id: o.id, displayName: o.displayName, email: o.email, avatarUrl: o.avatarUrl ?? null }
+          : null,
+        ownerId: j.ownerId,
+        candidateCounts: {
+          total: totalByJob.get(j.id) ?? 0,
+          active: activeByJob.get(j.id) ?? 0,
+        },
+        pipeline: {
+          id: j.pipeline.id,
+          name: j.pipeline.name,
+          isDefault: j.pipeline.isDefault,
+          statuses: j.pipeline.statuses.map((s) => ({
+            id: s.id,
+            name: s.name,
+            position: s.position,
+            category: s.category,
+            color: s.color,
+          })),
+        },
+      };
+    });
 
     const last = page.at(-1);
     const nextCursor =
@@ -150,6 +164,95 @@ export class JobDomainService {
         : null;
 
     return { items, nextCursor };
+  }
+
+  /**
+   * Job detail + Kanban cards from the slice DB (drained candidates/applications).
+   * `members` and `requiredSkills` are empty; comment/reaction badges are zero until those domains move.
+   */
+  async get(accountId: string, jobId: string, ctx: JobRequestContext = {}) {
+    const job = await this.db.job.findFirst({
+      where: { id: jobId, accountId },
+      include: {
+        pipeline: { include: { statuses: { orderBy: { position: 'asc' } } } },
+        applications: {
+          include: { candidate: true, currentStatus: true },
+          orderBy: [{ currentStatusId: 'asc' }, { position: 'asc' }],
+        },
+      },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+
+    let owner: { id: string; displayName: string | null; email: string; avatarUrl: string | null } | null = null;
+    if (job.ownerId) {
+      const m = await this.accounts.resolveMemberProfiles(accountId, [job.ownerId], ctx.authorization);
+      const o = m.get(job.ownerId);
+      if (o) {
+        owner = { id: o.id, displayName: o.displayName, email: o.email, avatarUrl: o.avatarUrl ?? null };
+      }
+    }
+
+    const applications = job.applications.map((a) => ({
+      id: a.id,
+      candidateId: a.candidateId,
+      jobId: a.jobId,
+      currentStatusId: a.currentStatusId,
+      position: a.position,
+      version: a.version,
+      appliedAt: a.appliedAt,
+      lastTransitionAt: a.lastTransitionAt,
+      commentCount: 0,
+      reactionSummary: {
+        counts: { THUMBS_UP: 0, THUMBS_DOWN: 0, STAR: 0 },
+        myReactions: [] as string[],
+      },
+      candidate: {
+        id: a.candidate.id,
+        firstName: a.candidate.firstName,
+        lastName: a.candidate.lastName,
+        headline: a.candidate.headline,
+        email: a.candidate.email,
+        currentTitle: a.candidate.currentTitle,
+        currentCompany: a.candidate.currentCompany,
+        yearsExperience: a.candidate.yearsExperience,
+        location: a.candidate.location,
+      },
+    }));
+
+    return {
+      id: job.id,
+      title: job.title,
+      description: job.description,
+      department: job.department,
+      location: job.location,
+      clientName: job.clientName,
+      headCount: job.headCount,
+      employmentType: job.employmentType,
+      status: job.status,
+      pipelineId: job.pipelineId,
+      requiredSkillIds: job.requiredSkillIds,
+      ownerId: job.ownerId,
+      openedAt: job.openedAt,
+      closedAt: job.closedAt,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      owner,
+      pipeline: {
+        id: job.pipeline.id,
+        name: job.pipeline.name,
+        isDefault: job.pipeline.isDefault,
+        statuses: job.pipeline.statuses.map((s) => ({
+          id: s.id,
+          name: s.name,
+          position: s.position,
+          category: s.category,
+          color: s.color,
+        })),
+      },
+      applications,
+      members: [] as unknown[],
+      requiredSkills: [] as unknown[],
+    };
   }
 
   static parseListQuery(params: {

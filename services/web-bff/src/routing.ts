@@ -1,4 +1,4 @@
-import { bffJobsToSliceEnabled, isPublicJobsListPath } from './job-public-rewrite';
+import { bffJobsToSliceEnabled, isPublicJobsReadPath } from './job-public-rewrite';
 import { bffPipelinesToSliceEnabled, isPublicPipelinesPath } from './pipeline-public-rewrite';
 
 /**
@@ -38,8 +38,8 @@ export function resolveUpstream(method: string, url: string): UpstreamKind {
     return 'pipeline';
   }
 
-  /** Strangler: paginated `GET /api/jobs` only → pipeline-service (detail + mutations stay on monolith). */
-  if (bffJobsToSliceEnabled() && m === 'GET' && isPublicJobsListPath(p)) {
+  /** Strangler: `GET /api/jobs` and `GET /api/jobs/:id` → pipeline-service (writes stay on monolith). */
+  if (bffJobsToSliceEnabled() && m === 'GET' && isPublicJobsReadPath(p)) {
     return 'pipeline';
   }
 

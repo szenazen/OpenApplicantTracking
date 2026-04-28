@@ -61,6 +61,7 @@ describe('resolveUpstream', () => {
     process.env.BFF_JOBS_TO_SLICE = '1';
     expect(resolveUpstream('GET', '/api/jobs')).toBe('pipeline');
     expect(resolveUpstream('GET', '/api/jobs?q=x')).toBe('pipeline');
+    expect(resolveUpstream('GET', '/api/jobs/job-id-1')).toBe('pipeline');
     process.env.BFF_JOBS_TO_SLICE = '0';
     expect(resolveUpstream('GET', '/api/jobs')).toBe('monolith');
   });
@@ -68,7 +69,7 @@ describe('resolveUpstream', () => {
   it('POST /api/jobs stays on monolith even when BFF_JOBS_TO_SLICE', () => {
     process.env.BFF_JOBS_TO_SLICE = '1';
     expect(resolveUpstream('POST', '/api/jobs')).toBe('monolith');
-    expect(resolveUpstream('GET', '/api/jobs/abc')).toBe('monolith');
+    expect(resolveUpstream('GET', '/api/jobs/foo/bar')).toBe('monolith');
   });
 
   it('preserves query string in path split', () => {

@@ -160,4 +160,26 @@ describe('AccountsService (unit)', () => {
       ]);
     });
   });
+
+  describe('resolveMemberProfiles', () => {
+    it('returns users in request order for active members only', async () => {
+      mockDb.membership.findMany.mockResolvedValue([
+        {
+          user: { id: 'u2', displayName: 'B', email: 'b@b.com', avatarUrl: null },
+        },
+      ]);
+      await expect(svc.resolveMemberProfiles('acc', ['u2', 'u1'])).resolves.toEqual({
+        users: [{ id: 'u2', displayName: 'B', email: 'b@b.com', avatarUrl: null }],
+      });
+      expect(mockDb.membership.findMany).toHaveBeenCalledWith({
+        where: { accountId: 'acc', status: 'ACTIVE', userId: { in: ['u2', 'u1'] } },
+        include: { user: { select: { id: true, displayName: true, email: true, avatarUrl: true } } },
+      });
+    });
+
+    it('returns empty when no ids', async () => {
+      await expect(svc.resolveMemberProfiles('acc', [])).resolves.toEqual({ users: [] });
+      expect(mockDb.membership.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

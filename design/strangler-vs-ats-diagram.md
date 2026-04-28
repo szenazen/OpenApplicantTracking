@@ -10,7 +10,7 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | **Auth Service** (login, tokens) | Pilot [`services/auth-service`](../services/auth-service) behind `/api/slice/auth/*` when `AUTH_SLICE_ENABLED`; primary auth for the app still flows through **`apps/api`** until fully cut over. |
 | **Account & Membership** | [`services/account-service`](../services/account-service): accounts, members, invitations (global DB), BFF-routed. |
 | **Pipeline Service** — CRUD pipelines, ordered statuses | [`services/pipeline-service`](../services/pipeline-service): pipelines REST + slice DB; BFF can rewrite `/api/pipelines` when `BFF_PIPELINES_TO_SLICE`. |
-| **Regional ATS** data: **jobs**, **pipelines**, **applications** cylinders | Slice DB holds **jobs** (list fields aligned with regional `Job` when drained), **pipelines**, **statuses**, **application** stubs; full Kanban/detail still **`apps/api`** until migrated. |
+| **Regional ATS** data: **jobs**, **pipelines**, **applications** | Slice DB holds **candidates**, **applications** (Kanban cards after drain), **jobs** (list fields), **pipelines**; pipeline-service may call **account-service** to resolve job **owners** (active members). |
 | **Service ownership** — own DB, no direct cross-DB reads | `pipeline-service` uses **only** `PIPELINE_SLICE_DATABASE_URL`; `account-service` uses global Prisma; **`apps/api`** owns regional DB until domains are fully split. |
 | **Async: Kafka** | `pipeline-service` emits to `oat.domain.pipeline` when `KAFKA_BROKERS` is set ([`DomainEventsService`](../services/pipeline-service/src/domain-events/domain-events.service.ts)); diagram’s “Kafka (async com)” matches this direction. |
 | **Realtime / Kanban live** | **Realtime Gateway** in the diagram → today **`/realtime`** is still proxied to **`apps/api`** (Socket.IO); separate gateway service not extracted yet. |
@@ -19,8 +19,8 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 
 | Diagram | Today’s strangler choice | Target end state (per diagram) |
 |---------|--------------------------|--------------------------------|
-| **Job Service** and **Pipeline Service** as **separate** boxes under Regional ATS | **One** deployable `pipeline-service` owns a **single slice DB** that includes **minimal `Job` rows** plus pipelines + statuses, and serves **`GET /api/jobs`** (list only) when `BFF_JOBS_TO_SLICE`. Reduces coordination during the pilot; **split into a dedicated Job Service + DB** when job CRUD and Kanban fully migrate. | Two services, two stores; HTTP/events between them. |
-| **Job Application Service** | Not extracted; applications live in **`apps/api`** regional DB; slice only has **stub** `Application` rows if drained for parity. | Dedicated service + APIs. |
+| **Job Service** and **Pipeline Service** as **separate** boxes under Regional ATS | **One** deployable `pipeline-service` owns a **single slice DB** (**jobs**, **pipelines**, **candidates**, **applications** when drained); BFF **`GET /api/jobs`** and **`GET /api/jobs/:id`** when `BFF_JOBS_TO_SLICE`. **Split** when job vs pipeline operational boundaries warrant it. | Two services, two stores; HTTP/events between them. |
+| **Job Application Service** | **Read path** for Kanban cards can be served from the slice after **drain**; writes, comments, reactions still **`apps/api`**. | Dedicated service + APIs. |
 | **Web BFF** description includes SSR shell, aggregation | BFF is **Fastify + `reply-from`**: reverse proxy and path rewrite, not Next SSR. **Next.js** remains **`apps/web`**. | Optional: move more aggregation into BFF or SSR as needed. |
 | **Mobile BFF** | Not implemented. | Separate BFF when mobile ships. |
 | **RBAC service** as separate global service | RBAC enforcement largely in **`apps/api`** and account flows; no standalone RBAC microservice in this repo yet. | Extract when scope warrants. |

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DomainEventsModule } from '../domain-events/domain-events.module';
+import { AccountServiceClient } from '../integrations/account-service.client';
 import { JobDomainService } from '../jobs/job-domain.service';
 import { JobsRestController } from '../jobs/jobs-rest.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -10,7 +11,7 @@ import { PipelinesRestController } from './pipelines-rest.controller';
 @Module({
   imports: [PrismaModule, AuthModule, DomainEventsModule],
   controllers: [PipelinesRestController, JobsRestController],
-  providers: [PipelineDomainService, JobDomainService],
+  providers: [PipelineDomainService, JobDomainService, AccountServiceClient],
   exports: [PipelineDomainService, JobDomainService],
 })
 export class PipelinesModule {}

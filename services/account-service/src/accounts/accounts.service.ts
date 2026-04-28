@@ -94,4 +94,34 @@ export class AccountsService {
 
     return { ok: true as const, userId: target.id, role: roleName };
   }
+
+  /**
+   * Return public profile fields for users who are **active members** of this account.
+   * Used by pipeline-service to resolve job owners without a direct global DB dependency.
+   */
+  async resolveMemberProfiles(accountId: string, userIds: string[]) {
+    const unique = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+    if (!unique.length) return { users: [] as Array<{ id: string; displayName: string | null; email: string; avatarUrl: string | null }> };
+
+    const rows = await this.db.membership.findMany({
+      where: {
+        accountId,
+        status: 'ACTIVE',
+        userId: { in: unique },
+      },
+      include: {
+        user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+      },
+    });
+
+    const byId = new Map(rows.map((r) => [r.user.id, r.user] as const));
+    const users = unique.map((id) => byId.get(id)).filter(Boolean) as Array<{
+      id: string;
+      displayName: string | null;
+      email: string;
+      avatarUrl: string | null;
+    }>;
+
+    return { users };
+  }
 }

@@ -5,6 +5,7 @@ import { AccountAdminOrManagerGuard } from '../common/account-admin-or-manager.g
 import { AccountContextGuard } from '../common/account-context.guard';
 import { AccountId, AuthUser, CurrentUser, MembershipRoleName } from '../common/request-context';
 import { AccountsService } from './accounts.service';
+import { ResolveMemberProfilesDto } from './dto/resolve-member-profiles.dto';
 
 class AddMemberDto {
   @IsEmail()
@@ -22,6 +23,12 @@ class AddMemberDto {
 @Controller('accounts')
 export class AccountsController {
   constructor(private readonly svc: AccountsService) {}
+
+  @Post('current/member-profiles')
+  @UseGuards(AuthGuard('jwt'), AccountContextGuard)
+  resolveMemberProfiles(@AccountId() accountId: string, @Body() dto: ResolveMemberProfilesDto) {
+    return this.svc.resolveMemberProfiles(accountId, dto.userIds);
+  }
 
   @Get('current/members')
   @UseGuards(AuthGuard('jwt'), AccountContextGuard)

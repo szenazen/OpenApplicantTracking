@@ -29,9 +29,13 @@ With `BFF_PIPELINES_TO_SLICE=1` (set in the overlay for `web-bff`):
 
 With **`BFF_JOBS_TO_SLICE=1`** (also set in `docker-compose.microservices.yml` for `web-bff`):
 
-- **`GET /api/jobs`** (paginated index only) is rewritten to  
+- **`GET /api/jobs`** (paginated index) is rewritten to  
   `/api/slice/pipeline/accounts/{x-account-id}/jobs?…` on `pipeline-service`.
-- **`GET /api/jobs/:id`**, **`POST /api/jobs`**, **`PATCH /api/jobs/:id`**, and all other routes still go to the **backup API** until the slice stores full job + Kanban data.
+- **`GET /api/jobs/:id`** (job detail + drained Kanban cards) is rewritten to  
+  `/api/slice/pipeline/accounts/{x-account-id}/jobs/{id}?…`.
+- **`POST /api/jobs`**, **`PATCH /api/jobs/:id`**, and all other routes still go to the **backup API**.
+
+**Owner chips:** pipeline-service calls account-service **`POST /api/accounts/current/member-profiles`** (same JWT + `x-account-id`) for active members only. Set **`ACCOUNT_SERVICE_URL`** on pipeline-service in compose, or owner fields stay empty.
 
 Any **non-sliced** traffic continues to **`apps/api`** (`MONOLITH_URL`, default `http://host.docker.internal:3001`).
 
@@ -86,7 +90,7 @@ If the browser talks to **`apps/api` on :3001** directly (no BFF), set:
 
 ## Jobs / “matching” routes
 
-- **Slice:** **`GET /api/jobs`** can be served from **`pipeline-service`** when `BFF_JOBS_TO_SLICE=1` (same list shape as the monolith for table views; minimal job rows + application counts). **Detail and mutations** stay on **`apps/api`**.
+- **Slice:** **`GET /api/jobs`** and **`GET /api/jobs/:id`** can be served from **`pipeline-service`** when `BFF_JOBS_TO_SLICE=1` (drain copies jobs, **candidates**, **applications** for Kanban cards). **Mutations** stay on **`apps/api`**.
 - The slice stores **minimal** job rows for pipeline invariants; the **drain script** copies that subset from the regional DB.
 - **Diagram alignment:** The target drawing has a dedicated **Job Service** separate from **Pipeline Service**; today they are **combined in the pilot** — see [`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md).
 

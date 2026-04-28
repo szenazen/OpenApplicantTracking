@@ -11,7 +11,7 @@
 #   pnpm --filter @oat/web dev
 #
 # Pipeline: BFF_PIPELINES_TO_SLICE=1 → `/api/pipelines` → pipeline-service (not apps/api).
-# Jobs: BFF_JOBS_TO_SLICE=1 → `GET /api/jobs` only → pipeline-service (detail + mutations stay on backup-api).
+# Jobs: BFF_JOBS_TO_SLICE=1 → `GET /api/jobs` and `GET /api/jobs/:id` → pipeline-service (writes stay on backup-api).
 # Same JWT_SECRET in `.env` as compose. Seed once: `docker compose exec backup-api pnpm exec tsx scripts/seed.ts`
 #
 # See docs/deployment-modes.md
@@ -137,11 +137,15 @@ services:
       # Same secret as monolith + account-service (JWT from browser must validate here).
       JWT_SECRET: ${JWT_SECRET:-dev-change-me-please-use-32-chars-minimum!!}
       KAFKA_BROKERS: redpanda:9092
+      # Owner resolution on job list/detail (POST /api/accounts/current/member-profiles)
+      ACCOUNT_SERVICE_URL: http://account-service:3010
     ports:
       - "3030:3030"
     depends_on:
       pipeline-slice-pg:
         condition: service_healthy
+      account-service:
+        condition: service_started
       redpanda:
         condition: service_started
 

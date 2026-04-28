@@ -7,7 +7,7 @@
  *   REGIONAL_SOURCE_URL="postgresql://..." PIPELINE_SLICE_DATABASE_URL="postgresql://..." \
  *   ACCOUNT_ID="cuid" pnpm --filter @oat/api exec tsx scripts/drain-pipelines-to-slice.ts
  *
- * Order: clear slice rows for the account, then insert pipelines, statuses, jobs, applications.
+ * Order: clear slice rows for the account, then insert pipelines, jobs, candidates, applications.
  * Jobs include list/search fields aligned with `apps/api` regional `Job` (slice schema parity).
  */
 
@@ -32,10 +32,12 @@ async function main() {
     where: { accountId },
     include: { statuses: { orderBy: { position: 'asc' } } },
   });
+  const candidates = await regional.candidate.findMany({ where: { accountId } });
   const jobs = await regional.job.findMany({ where: { accountId } });
   const applications = await regional.application.findMany({ where: { accountId } });
 
   await slice.application.deleteMany({ where: { accountId } });
+  await slice.candidate.deleteMany({ where: { accountId } });
   await slice.job.deleteMany({ where: { accountId } });
   await slice.pipeline.deleteMany({ where: { accountId } });
 
@@ -105,20 +107,61 @@ async function main() {
     });
   }
 
+  for (const c of candidates) {
+    await slice.candidate.upsert({
+      where: { id: c.id },
+      create: {
+        id: c.id,
+        accountId: c.accountId,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        headline: c.headline,
+        location: c.location,
+        currentCompany: c.currentCompany,
+        currentTitle: c.currentTitle,
+        yearsExperience: c.yearsExperience,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      },
+      update: {
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        headline: c.headline,
+        location: c.location,
+        currentCompany: c.currentCompany,
+        currentTitle: c.currentTitle,
+        yearsExperience: c.yearsExperience,
+        updatedAt: c.updatedAt,
+      },
+    });
+  }
+
   for (const a of applications) {
     await slice.application.upsert({
       where: { id: a.id },
       create: {
         id: a.id,
         accountId: a.accountId,
-        currentStatusId: a.currentStatusId,
+        candidateId: a.candidateId,
         jobId: a.jobId,
+        currentStatusId: a.currentStatusId,
+        position: a.position,
+        version: a.version,
+        appliedAt: a.appliedAt,
+        lastTransitionAt: a.lastTransitionAt,
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,
       },
       update: {
+        candidateId: a.candidateId,
         currentStatusId: a.currentStatusId,
         jobId: a.jobId,
+        position: a.position,
+        version: a.version,
+        appliedAt: a.appliedAt,
+        lastTransitionAt: a.lastTransitionAt,
         updatedAt: a.updatedAt,
       },
     });
@@ -126,7 +169,7 @@ async function main() {
 
   // eslint-disable-next-line no-console
   console.log(
-    `Drained: ${pipelines.length} pipelines, ${jobs.length} jobs, ${applications.length} applications for account ${accountId}`,
+    `Drained: ${pipelines.length} pipelines, ${jobs.length} jobs, ${candidates.length} candidates, ${applications.length} applications for account ${accountId}`,
   );
 }
 

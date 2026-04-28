@@ -2,7 +2,13 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import replyFrom from '@fastify/reply-from';
 
 import { buildAggregatedHealth } from './aggregated-health';
-import { bffJobsToSliceEnabled, isPublicJobsListPath, rewriteJobsListToSlicePath } from './job-public-rewrite';
+import {
+  bffJobsToSliceEnabled,
+  isPublicJobsDetailPath,
+  isPublicJobsListPath,
+  rewriteJobsDetailToSlicePath,
+  rewriteJobsListToSlicePath,
+} from './job-public-rewrite';
 import { bffPipelinesToSliceEnabled, isPublicPipelinesPath, rewritePipelinesToSlicePath } from './pipeline-public-rewrite';
 import { resolveUpstream, type UpstreamKind } from './routing';
 
@@ -121,14 +127,16 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
       pipeline &&
       bffJobsToSliceEnabled() &&
       method === 'GET' &&
-      isPublicJobsListPath(pathOnly)
+      (isPublicJobsListPath(pathOnly) || isPublicJobsDetailPath(pathOnly))
     ) {
       const acc = request.headers['x-account-id'];
       const accountId = Array.isArray(acc) ? acc[0] : acc;
       if (!accountId || typeof accountId !== 'string') {
-        return reply.status(400).send({ error: 'x-account-id header required for jobs list routes' });
+        return reply.status(400).send({ error: 'x-account-id header required for jobs routes' });
       }
-      dest = new URL(rewriteJobsListToSlicePath(request.url, accountId), `${pipeline}/`).toString();
+      dest = isPublicJobsListPath(pathOnly)
+        ? new URL(rewriteJobsListToSlicePath(request.url, accountId), `${pipeline}/`).toString()
+        : new URL(rewriteJobsDetailToSlicePath(request.url, accountId), `${pipeline}/`).toString();
     } else {
       dest = buildDestUrl(
         request,

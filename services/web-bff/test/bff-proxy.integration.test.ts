@@ -178,4 +178,34 @@ describe('Web BFF proxy (integration)', () => {
       pipeline.close();
     }
   });
+
+  it('rewrites GET /api/jobs/:id to slice when BFF_JOBS_TO_SLICE', async () => {
+    process.env.BFF_JOBS_TO_SLICE = '1';
+    const pipeline = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url ?? '' }));
+    });
+    const pPort = await listen(pipeline);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      pipelineServiceUrl: `http://127.0.0.1:${pPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${bffAddr.port}`;
+
+    try {
+      const r = await fetch(`${base}/api/jobs/job-99?tab=summary`, {
+        headers: { 'x-account-id': 'acc-job' },
+      });
+      expect(r.ok).toBe(true);
+      const j = (await r.json()) as { path: string };
+      expect(j.path).toBe('/api/slice/pipeline/accounts/acc-job/jobs/job-99?tab=summary');
+    } finally {
+      await app.close();
+      pipeline.close();
+    }
+  });
 });
