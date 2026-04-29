@@ -26,6 +26,8 @@
     "build:account-service": "pnpm --filter @oat/account-service build",
     "compose:gateway": "docker compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --build",
     "test:e2e:bff-slice": "bash scripts/run-e2e-bff-slice.sh",
+    "test:e2e:bff-slice:dry-run": "bash scripts/run-e2e-bff-slice.sh --dry-run",
+    "test:scripts": "bash scripts/test-run-e2e-bff-slice.sh",
     "dev:web-bff": "pnpm --filter @oat/web-bff dev",
     "dev:pipeline-service": "pnpm --filter @oat/pipeline-service dev",
     "dev:auth-service": "pnpm --filter @oat/auth-service dev",
