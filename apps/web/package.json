@@ -10,7 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:bff-slice": "bash ../../scripts/run-e2e-bff-slice.sh"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

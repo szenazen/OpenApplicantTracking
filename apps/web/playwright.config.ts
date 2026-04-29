@@ -12,7 +12,18 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Before running: `docker compose up -d global-pg region-us-east-1-pg region-eu-west-1-pg region-ap-southeast-1-pg redis`
  * then `pnpm --filter @oat/api db:migrate && pnpm --filter @oat/api db:seed`.
+ *
+ * **BFF + slice (optional):** `e2e/bff-slice-smoke.spec.ts` is excluded from the
+ * default `chromium` project so CI stays monolith-only. Run via
+ * `pnpm test:e2e:bff-slice` (repo root) or set `E2E_BFF_SLICE=1` and
+ * `E2E_BFF_WEB_URL` (defaults to `http://localhost:3002` if unset — match your
+ * Next dev server). The orchestration script uses port **3012** by default to
+ * avoid clashing with a dev server on :3002. See `docs/qa-pipeline-slice.md`.
  */
+const bffSliceTestFile = /bff-slice-smoke\.spec\.ts$/;
+
+const bffSliceBaseURL = process.env.E2E_BFF_WEB_URL ?? 'http://localhost:3002';
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
@@ -26,7 +37,22 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: bffSliceTestFile,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    ...(process.env.E2E_BFF_SLICE === '1'
+      ? [
+          {
+            name: 'bff-slice',
+            testMatch: bffSliceTestFile,
+            use: { ...devices['Desktop Chrome'], baseURL: bffSliceBaseURL },
+          },
+        ]
+      : []),
+  ],
   // We assume the developer has the servers already running (so tests start fast).
   // To orchestrate them here, uncomment the `webServer` block below.
   // webServer: [

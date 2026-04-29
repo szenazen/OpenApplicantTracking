@@ -57,6 +57,25 @@ pnpm --filter @oat/web dev
 
 Sign in, pick an account, open **Settings → Pipelines** (or any screen that loads pipelines). Creates/updates hit the slice DB.
 
+### Playwright smoke (BFF → slice)
+
+**One command (recommended):** from the repo root, brings up compose (if needed), seeds, drains **Hays US** → slice, starts Next on **127.0.0.1:3012** (overridable via `E2E_BFF_WEB_PORT`) with **`NEXT_PUBLIC_API_URL=http://localhost:3080`**, then runs Playwright:
+
+```bash
+pnpm test:e2e:bff-slice
+```
+
+Implementation: `scripts/run-e2e-bff-slice.sh`. Skip steps with `SKIP_COMPOSE=1`, `SKIP_SEED=1`, `SKIP_DRAIN=1`, or reuse an already-running Next dev server via `USE_EXISTING_WEB=1` (set **`E2E_BFF_WEB_URL`** to that server’s origin). First-time images: `BFF_E2E_BUILD=1 pnpm test:e2e:bff-slice`.
+
+**Manual:** set **`E2E_BFF_WEB_URL`** to match your Next dev server (Playwright default if unset: `http://localhost:3002`).
+
+```bash
+pnpm --filter @oat/web exec playwright install chromium
+cd apps/web && E2E_BFF_SLICE=1 E2E_BFF_WEB_URL=http://localhost:3002 pnpm exec playwright test --project=bff-slice
+```
+
+The default `pnpm test:e2e` (monolith API **:3001**) **excludes** `e2e/bff-slice-smoke.spec.ts` so CI stays unchanged.
+
 ## Health checks
 
 - BFF: `GET http://localhost:3080/bff-health`
