@@ -52,6 +52,12 @@ jobs:
       - name: Docker build backup-api image
         run: docker build -f apps/api/Dockerfile .
 
+      - name: Docker build user-service image
+        run: docker build -f services/user-service/Dockerfile .
+
+      - name: Docker build web-bff image
+        run: docker build -f services/web-bff/Dockerfile .
+
   api-tests:
     runs-on: ubuntu-latest
     services:
