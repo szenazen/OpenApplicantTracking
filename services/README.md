@@ -9,6 +9,7 @@ The original system design targets **separate deployable services** (Account & m
 | [`web-bff`](./web-bff) | `3080` | **Web BFF** (primary edge): account slice → `account-service`; **`/api/pipelines`**, **`GET /api/jobs`**, **`GET /api/jobs/:id`** → `pipeline-service` when `BFF_PIPELINES_TO_SLICE` / `BFF_JOBS_TO_SLICE`; **else** → backup API [`apps/api`](../apps/api) on `:3001`. Aligns with **single Web BFF** in [`design/ATS-design.drawio.xml`](../design/ATS-design.drawio.xml) — see [`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md) for gaps. | Default edge |
 | [`api-gateway`](./api-gateway) | (optional) | **Legacy** nginx: same routing rules in config; for comparison only — see [api-gateway/README.md](./api-gateway/README.md) | Optional |
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
+| [`user-service`](./user-service) | `3050` | Global DB: `GET /api/users/me` (JWT subject profile) routed by Web BFF when `USER_SLICE_ENABLED=1` | Strangler slice |
 | [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay). Pipelines CRUD + **pilot** minimal jobs + `GET` jobs index. BFF: `BFF_PIPELINES_TO_SLICE`, `BFF_JOBS_TO_SLICE` ([../docs/qa-pipeline-slice.md](../docs/qa-pipeline-slice.md)). Target diagram separates **Job Service** vs **Pipeline Service** — we are **pilot-combined** ([`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md)). | Pilot extract |
 | [`auth-service`](./auth-service) | `3020` | New paths `/api/slice/auth/*` (BFF flag); no shared DB; future token/MFA | Pilot extract |
 | [`kafka-ping`](./kafka-ping) | `3040` | Produce/consume on Redpanda (Kafka API) for async path smoke | Dev / wiring |
@@ -76,6 +77,8 @@ curl -s http://localhost:3010/api/platform/accounts -H "Authorization: Bearer $P
 Set `JWT_SECRET` in `.env` (≥32 chars) to match the monolith so tokens validate in both processes.
 
 **Tests:** after `pnpm --filter @oat/api db:migrate` (shared global DB), run `pnpm --filter @oat/account-service db:generate && pnpm --filter @oat/account-service test` (unit, no DB) and `pnpm --filter @oat/account-service test:integration` (HTTP + Postgres). CI runs both in the `api-tests` job.
+
+User slice tests: `pnpm --filter @oat/user-service db:generate && pnpm --filter @oat/user-service test` (unit) and `pnpm --filter @oat/user-service test:integration` (HTTP + Postgres).
 
 **Why Compose first:** faster feedback than Kubernetes, same images you promote to prod, no local VM. [`docker-compose.microservices.yml`](../docker-compose.microservices.yml) adds **`web-bff` (:3080)** and **`account-service` (:3010)**; the backup API typically still runs on the host until those routes are retired.
 

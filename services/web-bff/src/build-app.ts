@@ -23,6 +23,7 @@ function buildDestUrl(
     account: string;
     pipeline?: string;
     auth?: string;
+    user?: string;
   },
   kind: Exclude<UpstreamKind, 'self'>,
 ): string {
@@ -38,6 +39,12 @@ function buildDestUrl(
     }
     return new URL(req.url, `${trimBase(bases.auth)}/`).toString();
   }
+  if (kind === 'user') {
+    if (!bases.user) {
+      throw new Error('user upstream not configured');
+    }
+    return new URL(req.url, `${trimBase(bases.user)}/`).toString();
+  }
   const base = kind === 'account' ? bases.account : bases.monolith;
   return new URL(req.url, `${trimBase(base)}/`).toString();
 }
@@ -49,6 +56,7 @@ export type BffOptions = {
   /** Optional — when slice env flags route to these hosts */
   pipelineServiceUrl?: string;
   authServiceUrl?: string;
+  userServiceUrl?: string;
   /** Optional — only used by /api/bff/aggregated-health */
   kafkaPingUrl?: string;
 };
@@ -58,6 +66,7 @@ const DEFAULTS: BffOptions = {
   accountServiceUrl: process.env.ACCOUNT_SERVICE_URL ?? 'http://127.0.0.1:3010',
   pipelineServiceUrl: process.env.PIPELINE_SERVICE_URL,
   authServiceUrl: process.env.AUTH_SERVICE_URL,
+  userServiceUrl: process.env.USER_SERVICE_URL,
   kafkaPingUrl: process.env.KAFKA_PING_URL,
 };
 
@@ -72,6 +81,7 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
   const account = trimBase(o.accountServiceUrl);
   const pipeline = o.pipelineServiceUrl ? trimBase(o.pipelineServiceUrl) : undefined;
   const auth = o.authServiceUrl ? trimBase(o.authServiceUrl) : undefined;
+  const user = o.userServiceUrl ? trimBase(o.userServiceUrl) : undefined;
 
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
@@ -97,6 +107,7 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
       accountServiceUrl: account,
       pipelineServiceUrl: pipeline,
       authServiceUrl: auth,
+      userServiceUrl: user,
       kafkaPingUrl: o.kafkaPingUrl,
     });
   });
@@ -111,6 +122,9 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
     }
     if (kind === 'auth' && !auth) {
       return reply.status(503).send({ error: 'Auth slice not configured (set AUTH_SERVICE_URL)' });
+    }
+    if (kind === 'user' && !user) {
+      return reply.status(503).send({ error: 'User slice not configured (set USER_SERVICE_URL)' });
     }
     const pathOnly = (request.url.split('?')[0] ?? '').split('#')[0] ?? '';
     const method = request.method.toUpperCase();
@@ -140,7 +154,7 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
     } else {
       dest = buildDestUrl(
         request,
-        { monolith, account, pipeline, auth },
+        { monolith, account, pipeline, auth, user },
         kind,
       );
     }

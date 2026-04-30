@@ -10,10 +10,15 @@ import { bffPipelinesToSliceEnabled, isPublicPipelinesPath } from './pipeline-pu
  * The identifier `monolith` in {@link UpstreamKind} means that backup API, not
  * “center of architecture.”
  */
-export type UpstreamKind = 'monolith' | 'account' | 'pipeline' | 'auth' | 'self';
+export type UpstreamKind = 'monolith' | 'account' | 'pipeline' | 'auth' | 'user' | 'self';
 
-function isEnabled(name: 'PIPELINE_SLICE' | 'AUTH_SLICE'): boolean {
-  const k = name === 'PIPELINE_SLICE' ? 'PIPELINE_SLICE_ENABLED' : 'AUTH_SLICE_ENABLED';
+function isEnabled(name: 'PIPELINE_SLICE' | 'AUTH_SLICE' | 'USER_SLICE'): boolean {
+  const k =
+    name === 'PIPELINE_SLICE'
+      ? 'PIPELINE_SLICE_ENABLED'
+      : name === 'AUTH_SLICE'
+        ? 'AUTH_SLICE_ENABLED'
+        : 'USER_SLICE_ENABLED';
   return process.env[k] === '1' || process.env[k] === 'true';
 }
 
@@ -45,6 +50,10 @@ export function resolveUpstream(method: string, url: string): UpstreamKind {
 
   if (isEnabled('AUTH_SLICE') && p.startsWith('/api/slice/auth')) {
     return 'auth';
+  }
+
+  if (isEnabled('USER_SLICE') && m === 'GET' && p === '/api/users/me') {
+    return 'user';
   }
 
   if (p === '/api/accounts') {

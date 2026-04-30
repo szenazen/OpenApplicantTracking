@@ -38,6 +38,7 @@ export type AggregatedHealthInput = {
   /** When set, probe pipeline slice and kafka ping */
   pipelineServiceUrl?: string;
   authServiceUrl?: string;
+  userServiceUrl?: string;
   kafkaPingUrl?: string;
 };
 
@@ -66,6 +67,10 @@ export async function buildAggregatedHealth(
   if (o.authServiceUrl) {
     const p = o.authServiceUrl.replace(/\/$/, '');
     out.auth = await getJson(new URL('/health', `${p}/`).toString());
+  }
+  if (o.userServiceUrl) {
+    const u = o.userServiceUrl.replace(/\/$/, '');
+    out.user = await getJson(new URL('/health', `${u}/`).toString());
   }
   if (o.kafkaPingUrl) {
     const k = o.kafkaPingUrl.replace(/\/$/, '');

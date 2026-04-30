@@ -46,6 +46,7 @@ jobs:
       - run: pnpm --filter @oat/api db:generate
       - run: pnpm --filter @oat/account-service db:generate
       - run: pnpm --filter @oat/pipeline-service db:generate
+      - run: pnpm --filter @oat/user-service db:generate
       - run: pnpm -r --if-present lint
       - run: pnpm -r --if-present typecheck
       - name: Docker build backup-api image
@@ -101,6 +102,9 @@ jobs:
       - name: Generate pipeline-service Prisma client
         run: pnpm --filter @oat/pipeline-service db:generate
 
+      - name: Generate user-service Prisma client
+        run: pnpm --filter @oat/user-service db:generate
+
       - name: Migrate all datasources
         run: pnpm --filter @oat/api db:migrate
 
@@ -124,6 +128,12 @@ jobs:
 
       - name: Kafka ping tests
         run: pnpm --filter @oat/kafka-ping test
+
+      - name: User service unit tests
+        run: pnpm --filter @oat/user-service test
+
+      - name: User service integration tests
+        run: pnpm --filter @oat/user-service test:integration
 
   e2e-tests:
     runs-on: ubuntu-latest

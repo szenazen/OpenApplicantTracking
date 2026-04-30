@@ -160,6 +160,23 @@ services:
     ports:
       - "3020:3020"
 
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    container_name: oat-user-service
+    restart: unless-stopped
+    environment:
+      GLOBAL_DATABASE_URL: postgresql://oat:oat@global-pg:5432/oat_global?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-change-me-please-use-32-chars-minimum!!}
+      USER_SERVICE_PORT: "3050"
+      NODE_ENV: development
+    ports:
+      - "3050:3050"
+    depends_on:
+      global-pg:
+        condition: service_healthy
+
   kafka-ping:
     build:
       context: .
@@ -186,11 +203,13 @@ services:
       BFF_PORT: "3080"
       PIPELINE_SLICE_ENABLED: "1"
       AUTH_SLICE_ENABLED: "1"
+      USER_SLICE_ENABLED: "1"
       # Public /api/pipelines → pipeline-service (same JSON; needs x-account-id on requests).
       BFF_PIPELINES_TO_SLICE: "1"
       BFF_JOBS_TO_SLICE: "1"
       PIPELINE_SERVICE_URL: http://pipeline-service:3030
       AUTH_SERVICE_URL: http://auth-service:3020
+      USER_SERVICE_URL: http://user-service:3050
       KAFKA_PING_URL: http://kafka-ping:3040
     ports:
       - "3080:3080"
@@ -202,6 +221,8 @@ services:
       pipeline-service:
         condition: service_started
       auth-service:
+        condition: service_started
+      user-service:
         condition: service_started
       kafka-ping:
         condition: service_started

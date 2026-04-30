@@ -6,6 +6,7 @@ node_modules/
 dist/
 services/account-service/src/generated/
 services/pipeline-service/src/generated/
+services/user-service/src/generated/
 build/
 .next/
 .turbo/

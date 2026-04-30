@@ -16,9 +16,11 @@ function listen(server: ReturnType<typeof createServer>): Promise<number> {
 describe('Web BFF proxy (integration)', () => {
   const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
   const oldBffJobs = process.env.BFF_JOBS_TO_SLICE;
+  const oldUserSlice = process.env.USER_SLICE_ENABLED;
   afterEach(() => {
     process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
     process.env.BFF_JOBS_TO_SLICE = oldBffJobs;
+    process.env.USER_SLICE_ENABLED = oldUserSlice;
   });
 
   it('routes invitations to account upstream and jobs to monolith', async () => {
@@ -206,6 +208,55 @@ describe('Web BFF proxy (integration)', () => {
     } finally {
       await app.close();
       pipeline.close();
+    }
+  });
+
+  it('routes GET /api/users/me to user-service when USER_SLICE_ENABLED', async () => {
+    process.env.USER_SLICE_ENABLED = '1';
+    const user = createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ upstream: 'user', path: req.url ?? '' }));
+    });
+    const uPort = await listen(user);
+
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+      userServiceUrl: `http://127.0.0.1:${uPort}`,
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${bffAddr.port}`;
+
+    try {
+      const r = await fetch(`${base}/api/users/me`);
+      expect(r.ok).toBe(true);
+      const j = (await r.json()) as { upstream: string; path: string };
+      expect(j.upstream).toBe('user');
+      expect(j.path).toBe('/api/users/me');
+    } finally {
+      await app.close();
+      user.close();
+    }
+  });
+
+  it('returns 503 for GET /api/users/me when USER_SLICE_ENABLED without USER_SERVICE_URL', async () => {
+    process.env.USER_SLICE_ENABLED = '1';
+    const app = await buildApp({
+      monolithUrl: 'http://127.0.0.1:9',
+      accountServiceUrl: 'http://127.0.0.1:9',
+    });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const bffAddr = app.server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${bffAddr.port}`;
+
+    try {
+      const r = await fetch(`${base}/api/users/me`);
+      expect(r.status).toBe(503);
+      const j = (await r.json()) as { error?: string };
+      expect(j.error).toContain('USER_SERVICE_URL');
+    } finally {
+      await app.close();
     }
   });
 });
