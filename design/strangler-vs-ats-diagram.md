@@ -7,6 +7,7 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | Diagram concept | Repo reality |
 |-----------------|--------------|
 | **Web BFF** as the browser-facing edge (SSR / aggregation described in the diagram; we implement routing + proxy first) | [`services/web-bff`](../services/web-bff): path-based routing to services and backup API ([`routing.ts`](../services/web-bff/src/routing.ts)). |
+| **Optional nginx** reference gateway | [`services/api-gateway/nginx.conf`](../services/api-gateway/nginx.conf): mirrors **account** + **invitation** splits and proxies **`/api/slice/auth/*`** → `auth-service` (port **3020** in Compose). Does **not** duplicate BFF-only rewrites (`/api/pipelines`, `GET /api/jobs`, `USER_SLICE` `GET /api/users/me` — commented pattern in config). See [ADR 0003](../docs/adr/0003-web-bff-edge-strangler.md). |
 | **Auth Service** (login, tokens) | Pilot [`services/auth-service`](../services/auth-service): `/api/slice/auth/*` when enabled (e.g. **JWT cryptographic verify** `POST …/verify-access` — no DB); **login/register/session** remain on **`apps/api`** until full cut-over. |
 | **User Service** (profile) | [`services/user-service`](../services/user-service): `GET /api/users/me` (global DB, JWT `sub`) when `USER_SLICE_ENABLED` + `USER_SERVICE_URL`; BFF aggregated health probes user `/health` when configured. |
 | **Account & Membership** | [`services/account-service`](../services/account-service): accounts, members, invitations (global DB), BFF-routed. |

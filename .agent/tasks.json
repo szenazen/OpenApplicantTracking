@@ -1,0 +1,62 @@
+[
+  {
+    "id": "TASK-STRANGLER-NGINX-AUTH-001",
+    "title": "Optional nginx: proxy /api/slice/auth to auth-service",
+    "type": "implementation",
+    "priority": 1,
+    "status": "done",
+    "role": "engineer",
+    "phase": "done",
+    "acceptance_criteria": [
+      "nginx.conf routes /api/slice/auth prefix to auth_service upstream (:3020 on docker network)",
+      "Strangler / api-gateway docs note parity with Web BFF and limits (no duplicate BFF-only rewrites)",
+      "pnpm tests run for unaffected routing packages verify green"
+    ],
+    "context_refs": [
+      "services/web-bff/src/routing.ts",
+      "services/api-gateway/nginx.conf",
+      "design/strangler-vs-ats-diagram.md",
+      "docs/adr/0003-web-bff-edge-strangler.md",
+      ".agent/prd/prd.md"
+    ],
+    "evidence_refs": [],
+    "validation": [
+      "pnpm --filter @oat/web-bff test",
+      "pnpm --filter @oat/auth-service test"
+    ],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": "feat/nginx-auth-slice-parity",
+    "file_scope": ["services/api-gateway/nginx.conf", "services/api-gateway/README.md", "design/strangler-vs-ats-diagram.md"],
+    "handoff": "Nginx mirrors auth slice; RBAC extraction still backlog."
+  },
+  {
+    "id": "TASK-RBAC-NEXT-002",
+    "title": "Decide RBAC/account membership read API split (diagram RBAC vs monolith guards)",
+    "type": "architecture",
+    "priority": 2,
+    "status": "pending",
+    "role": "architect",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "ADR or strangler diagram update for target home of AccountGuard-equivalent APIs",
+      "List of endpoints that stay in apps/api vs account-service extensions"
+    ],
+    "context_refs": [
+      "design/strangler-vs-ats-diagram.md",
+      "apps/api/src/common/account.guard.ts",
+      "services/account-service"
+    ],
+    "evidence_refs": [],
+    "validation": [],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": [],
+    "handoff": "No standalone RBAC service; monolith JwtStrategy loads ACTIVE user global DB."
+  }
+]

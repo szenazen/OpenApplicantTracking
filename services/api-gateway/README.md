@@ -17,3 +17,10 @@ docker build -f services/api-gateway/Dockerfile -t oat-api-gateway .
 
 `nginx.conf` is kept in sync *conceptually* with `web-bff` routing; when
 changing one, update the other.
+
+**Mirrored paths (high level)**
+
+- Global **account-service**: `/api/accounts/current/*`, `GET /api/accounts/:id` (single segment), `/api/invitations`, `GET /api/platform/accounts`; `POST /api/platform/accounts` and `POST /api/accounts` → monolith.
+- **Auth slice**: `GET|POST /api/slice/auth/*` (probe, `verify-access`) → **`auth-service:3020`** (`POST /api/slice/auth/verify-access`, etc.) — aligns with **`AUTH_SLICE_ENABLED`** behaviour on Web BFF; **session login/register remain on backup `apps/api`**, not auth-service.
+
+**Not duplicated in nginx (use Web BFF on :3080):** `BFF_PIPELINES_TO_SLICE` / `BFF_JOBS_TO_SLICE` path rewrites, `USER_SLICE` `GET /api/users/me`; see comments in [`nginx.conf`](./nginx.conf).
