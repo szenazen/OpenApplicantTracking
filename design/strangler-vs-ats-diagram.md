@@ -24,10 +24,10 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | **Job Application Service** | **Read path** for Kanban cards can be served from the slice after **drain**; writes, comments, reactions still **`apps/api`**. | Dedicated service + APIs. |
 | **Web BFF** description includes SSR shell, aggregation | BFF is **Fastify + `reply-from`**: reverse proxy and path rewrite, not Next SSR. **Next.js** remains **`apps/web`**. | Optional: move more aggregation into BFF or SSR as needed. |
 | **Mobile BFF** | Not implemented. | Separate BFF when mobile ships. |
-| **RBAC service** as separate global service | RBAC enforcement largely in **`apps/api`** and account flows; no standalone RBAC microservice in this repo yet. | Extract when scope warrants. |
+| **RBAC service** as separate global service | Account-scoped roles live in **global DB**; enforced via **`apps/api` [`AccountGuard`](../apps/api/src/common/account.guard.ts)** (membership + **region** pin) vs **`account-service` [`AccountContextGuard`](../services/account-service/src/common/account-context.guard.ts)** (membership only). No standalone RBAC service yet — see [ADR 0004](../docs/adr/0004-account-membership-rbac-boundary.md). | Extract when scope warrants. |
 
 ## How to use this file
 
 - When adding a **new BFF route** or service, check the diagram for **ownership** (which DB and which service box).
-- Prefer **new regional behavior** in an **owned service + owned DB** rather than growing **`apps/api`** as the default path (see [ADR 0003](../docs/adr/0003-web-bff-edge-strangler.md)).
+- Prefer **new regional behavior** in an **owned service + owned DB** rather than growing **`apps/api`** as the default path (see [ADR 0003](../docs/adr/0003-web-bff-edge-strangler.md)). For **membership vs regional guard** rules, see [ADR 0004](../docs/adr/0004-account-membership-rbac-boundary.md).
 - **Split `pipeline-service`** when job and application domains are ready to match the diagram’s **Job Service** / **Job Application Service** boundaries.
