@@ -49,6 +49,17 @@ export class AccountsController {
   }
 
   /**
+   * Read-only ACTIVE membership probe: same JSON shape as account-service
+   * (`{ accountId, role, status: 'ACTIVE' }`) for callers on backup API :3001 (ADR 0004).
+   */
+  @ApiHeader({ name: 'x-account-id', required: true })
+  @UseGuards(AccountGuard)
+  @Get('current/membership')
+  currentMembership(@AccountId() accountId: string, @MembershipRoleName() role: string) {
+    return { accountId, role, status: 'ACTIVE' as const };
+  }
+
+  /**
    * Roles allowed when inviting / adding users (admin vs account manager).
    */
   @ApiHeader({ name: 'x-account-id', required: true })

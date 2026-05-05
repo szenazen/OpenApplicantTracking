@@ -105,7 +105,7 @@
       "docs/adr/0004-account-membership-rbac-boundary.md",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "handoff": "ADR 0004 on main; next: TASK-RBAC-MEMBERSHIP-API-007 per ADR 0004."
+    "handoff": "ADR 0004 on main; **007** probes are in **review** (slice + monolith parity)."
   },
   {
     "id": "TASK-ADR-AUTH-MIGRATION-004",
@@ -215,9 +215,9 @@
     "title": "Implement membership/RBAC read API split per ADR 0004 (account-service vs new service)",
     "type": "implementation",
     "priority": 6,
-    "status": "in_progress",
+    "status": "review",
     "role": "engineer",
-    "phase": "implement",
+    "phase": "review",
     "acceptance_criteria": [
       "Behavior matches ADR 0004: scoped APIs for membership/role reads used by BFF or regional services",
       "apps/api guards updated or shimmed per ADR; tests for moved surface",
@@ -230,7 +230,8 @@
       "design/strangler-vs-ats-diagram.md"
     ],
     "evidence_refs": [
-      "2026-05-05: ADR 0004 optional probe — `GET /api/accounts/current/membership` on account-service; BFF already routes `/api/accounts/current/*`. Tests: unit + integration (120s cap)."
+      "2026-05-05: ADR 0004 probe — `GET /api/accounts/current/membership` on account-service; BFF routes `/api/accounts/current/*`. Tests: `@oat/account-service` unit + integration (120s cap).",
+      "2026-05-05: Monolith parity — same route + `{ accountId, role, status: 'ACTIVE' }` on `apps/api` via `AccountGuard`; `pnpm --filter @oat/api exec jest test/accounts.spec.ts --runInBand` (bounded). ADR 0004 endpoint table row documents slice vs backup API."
     ],
     "validation": [
       "pnpm --filter @oat/account-service test && test:integration",
@@ -243,7 +244,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/account-service", "apps/api/src/common", "services/web-bff/src/routing.ts"],
-    "handoff": "Slice 1 done: read-only membership probe. Next: adopt at BFF/edge if needed; monolith/shim parity + broader reads per ADR 0004 backlog."
+    "handoff": "Reviewer: slice + monolith expose read-only membership probe per ADR 0004 (contract aligned). Merge or mark **done** after PR review; follow-on ADR backlog for richer membership reads stays separate."
   },
   {
     "id": "TASK-WEB-BFF-HARDEN-008",

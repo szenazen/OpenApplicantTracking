@@ -35,6 +35,7 @@ Strangler **BFF** routing can send **`/api/accounts/**`** traffic to **`account-
 | Surface | Deployable | Notes |
 |--------|------------|--------|
 | **`/api/accounts`**, **`/api/accounts/current/*`**, **`/api/accounts/:id`**, **`/api/invitations*`**, **`/api/platform/accounts*`** (as routed by BFF) | **`account-service`** | Parity controllers under `/api`; [`AccountContextGuard`](../../services/account-service/src/common/account-context.guard.ts) only. |
+| **`GET /api/accounts/current/membership`** | **`account-service`** (via BFF) **and** **`apps/api`** (direct :3001) | Same JSON: `{ accountId, role, status: 'ACTIVE' }` after JWT + ACTIVE membership + `x-account-id`. Monolith uses [`AccountGuard`](../../apps/api/src/common/account.guard.ts) (pins region); slice uses [`AccountContextGuard`](../../services/account-service/src/common/account-context.guard.ts) only. |
 | **Regional ATS:** jobs, candidates, applications, pipelines, search, comments, reactions, notes, activities, sourcing, home, reports, recommendations, notifications (members-scoped), job-members | **`apps/api`** | Typically **`AuthGuard` + `AccountGuard`**; [`AccountGuard`](../../apps/api/src/common/account.guard.ts) sets **region**. |
 | **`/api/auth`**, session login/register | **`apps/api`** | Not auth-service until full cut-over (see ADR 0003 / auth-service README). |
 | **`/api/slice/auth/*`** | **`auth-service`** (when enabled) | JWT verify probe only; no membership DB. |

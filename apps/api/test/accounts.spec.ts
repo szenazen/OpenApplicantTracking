@@ -174,6 +174,16 @@ describe('Accounts (integration)', () => {
     expect(res.body.slug).toBe(usSlug);
   });
 
+  it('GET /accounts/current/membership: read-only probe matches account-service contract', async () => {
+    const id = createdAccountIds[0]!;
+    const res = await request(app.getHttpServer())
+      .get('/accounts/current/membership')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('x-account-id', id)
+      .expect(200);
+    expect(res.body).toEqual({ accountId: id, role: 'admin', status: 'ACTIVE' });
+  });
+
   it('POST /accounts: requires authentication', async () => {
     await request(app.getHttpServer())
       .post('/accounts')
