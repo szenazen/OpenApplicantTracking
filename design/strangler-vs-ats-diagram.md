@@ -7,7 +7,7 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | Diagram concept | Repo reality |
 |-----------------|--------------|
 | **Web BFF** as the browser-facing edge (SSR / aggregation described in the diagram; we implement routing + proxy first) | [`services/web-bff`](../services/web-bff): path-based routing to services and backup API ([`routing.ts`](../services/web-bff/src/routing.ts)). |
-| **Auth Service** (login, tokens) | Pilot [`services/auth-service`](../services/auth-service) behind `/api/slice/auth/*` when `AUTH_SLICE_ENABLED`; primary auth for the app still flows through **`apps/api`** until fully cut over. |
+| **Auth Service** (login, tokens) | Pilot [`services/auth-service`](../services/auth-service): `/api/slice/auth/*` when enabled (e.g. **JWT cryptographic verify** `POST …/verify-access` — no DB); **login/register/session** remain on **`apps/api`** until full cut-over. |
 | **User Service** (profile) | [`services/user-service`](../services/user-service): `GET /api/users/me` (global DB, JWT `sub`) when `USER_SLICE_ENABLED` + `USER_SERVICE_URL`; BFF aggregated health probes user `/health` when configured. |
 | **Account & Membership** | [`services/account-service`](../services/account-service): accounts, members, invitations (global DB), BFF-routed. |
 | **Pipeline Service** — CRUD pipelines, ordered statuses | [`services/pipeline-service`](../services/pipeline-service): pipelines REST + slice DB; BFF can rewrite `/api/pipelines` when `BFF_PIPELINES_TO_SLICE`. |

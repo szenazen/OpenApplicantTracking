@@ -11,7 +11,7 @@ The original system design targets **separate deployable services** (Account & m
 | [`account-service`](./account-service) | `3010` | Global DB: accounts, members, invitations, `GET /api/platform/accounts` (JWT + `x-account-id`; platform JWT for `/platform/*`) | Strangler slice |
 | [`user-service`](./user-service) | `3050` | Global DB: `GET /api/users/me` (JWT subject profile) routed by Web BFF when `USER_SLICE_ENABLED=1` | Strangler slice |
 | [`pipeline-service`](./pipeline-service) | `3030` | **Own DB** (`pipeline-slice-pg` in overlay). Pipelines CRUD + **pilot** minimal jobs + `GET` jobs index. BFF: `BFF_PIPELINES_TO_SLICE`, `BFF_JOBS_TO_SLICE` ([../docs/qa-pipeline-slice.md](../docs/qa-pipeline-slice.md)). Target diagram separates **Job Service** vs **Pipeline Service** — we are **pilot-combined** ([`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md)). | Pilot extract |
-| [`auth-service`](./auth-service) | `3020` | New paths `/api/slice/auth/*` (BFF flag); no shared DB; future token/MFA | Pilot extract |
+| [`auth-service`](./auth-service) | `3020` | **`POST /api/slice/auth/verify-access`** (JWT signature/expiry vs `JWT_SECRET`); **`GET …/probe`** (BFF flag); no DB; login/register still on backup API until cut-over | Pilot extract |
 | [`kafka-ping`](./kafka-ping) | `3040` | Produce/consume on Redpanda (Kafka API) for async path smoke | Dev / wiring |
 
 **Monolith vs edge:** [docs/deployment-modes.md](../docs/deployment-modes.md).

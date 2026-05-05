@@ -58,6 +58,9 @@ jobs:
       - name: Docker build web-bff image
         run: docker build -f services/web-bff/Dockerfile .
 
+      - name: Docker build auth-service image
+        run: docker build -f services/auth-service/Dockerfile .
+
   api-tests:
     runs-on: ubuntu-latest
     services:

@@ -88,6 +88,7 @@ describe('resolveUpstream', () => {
   it('optional auth slice when flag set', () => {
     process.env.AUTH_SLICE_ENABLED = '1';
     expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('auth');
+    expect(resolveUpstream('POST', '/api/slice/auth/verify-access')).toBe('auth');
     process.env.AUTH_SLICE_ENABLED = '0';
     expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('monolith');
   });
