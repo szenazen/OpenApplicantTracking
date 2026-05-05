@@ -50,8 +50,16 @@
       "services/account-service",
       "docs/adr/0004-account-membership-rbac-boundary.md"
     ],
-    "evidence_refs": ["docs/adr/0004-account-membership-rbac-boundary.md"],
-    "validation": ["docs/adr/0004-account-membership-rbac-boundary.md"],
+    "evidence_refs": [
+      "docs/adr/0004-account-membership-rbac-boundary.md",
+      "design/strangler-vs-ats-diagram.md — RBAC row → ADR 0004",
+      "2026-05-05 validation (120s cap): pnpm --filter @oat/web-bff test; pnpm --filter @oat/account-service test — green"
+    ],
+    "validation": [
+      "docs/adr/0004-account-membership-rbac-boundary.md on disk (merge PR feat/adr-rbac-membership-boundary → main to land on canonical mainline)",
+      "pnpm --filter @oat/web-bff test",
+      "pnpm --filter @oat/account-service test"
+    ],
     "risk_level": "medium",
     "context_budget": "medium",
     "work_mode": "collaborative",

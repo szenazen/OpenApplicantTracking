@@ -2,7 +2,7 @@
 
 ## Active Task
 
-- ID: **TASK-RBAC-NEXT-002** (done — ADR + diagram landed on `feat/adr-rbac-membership-boundary`)
+- ID: **TASK-RBAC-NEXT-002** (done on this branch; merge PR → `main` for canonical mainline docs)
 - Title: Decide RBAC/account membership read API split
 - Role: architect
 - Work mode: collaborative

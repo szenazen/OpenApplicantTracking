@@ -23,8 +23,8 @@
 
 ## Validation
 
-- `pnpm --filter @oat/web-bff test` (no app code changed; smoke)
-- `pnpm --filter @oat/auth-service test`
+- **`feat/adr-rbac-membership-boundary` (2026-05-05):** `pnpm --filter @oat/web-bff test`, `pnpm --filter @oat/account-service test` (`perl -e 'alarm 120; exec @ARGV' …`) — green.
+- **Nginx strangler slice PR:** `pnpm --filter @oat/auth-service test` alongside web-bff (see TASK-STRANGLER validation in `tasks.json`).
 
 ## Negative Space
 
