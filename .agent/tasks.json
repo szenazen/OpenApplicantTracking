@@ -19,7 +19,9 @@
       "docs/adr/0003-web-bff-edge-strangler.md",
       ".agent/prd/prd.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-05 agent validation: pnpm --filter @oat/web-bff test; pnpm --filter @oat/auth-service test (120s cap, all green)"
+    ],
     "validation": [
       "pnpm --filter @oat/web-bff test",
       "pnpm --filter @oat/auth-service test"
@@ -30,7 +32,7 @@
     "base_branch": "main",
     "branch": "feat/nginx-auth-slice-parity",
     "file_scope": ["services/api-gateway/nginx.conf", "services/api-gateway/README.md", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Nginx mirrors auth slice; RBAC extraction still backlog."
+    "handoff": "Merge PR feat/nginx-auth-slice-parity → main; optional nginx edge parity for /api/slice/auth is complete on branch."
   },
   {
     "id": "TASK-RBAC-NEXT-002",
@@ -47,16 +49,22 @@
     "context_refs": [
       "design/strangler-vs-ats-diagram.md",
       "apps/api/src/common/account.guard.ts",
-      "services/account-service"
+      "services/account-service",
+      "docs/adr/0004-account-membership-rbac-boundary.md"
     ],
-    "evidence_refs": [],
-    "validation": [],
+    "evidence_refs": [
+      "Draft ADR 0004 + diagram updates on branch feat/adr-rbac-membership-boundary (merge to main separately or stack after nginx PR)"
+    ],
+    "validation": ["docs/adr/0004-account-membership-rbac-boundary.md once on main"],
     "risk_level": "medium",
     "context_budget": "medium",
     "work_mode": "collaborative",
     "base_branch": "main",
-    "branch": null,
-    "file_scope": [],
-    "handoff": "No standalone RBAC service; monolith JwtStrategy loads ACTIVE user global DB."
+    "branch": "feat/adr-rbac-membership-boundary",
+    "file_scope": [
+      "docs/adr/0004-account-membership-rbac-boundary.md",
+      "design/strangler-vs-ats-diagram.md"
+    ],
+    "handoff": "ADR 0004 defines AccountGuard vs AccountContextGuard; land via feat/adr-rbac-membership-boundary PR."
   }
 ]

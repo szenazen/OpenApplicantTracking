@@ -1,20 +1,14 @@
 # Current Task
 
-## Active Task
+## Recently completed
 
-- ID: TASK-STRANGLER-NGINX-AUTH-001 (implementation complete — ready to PR)
-- Title: Optional nginx: proxy `/api/slice/auth` to auth-service
-- Role: engineer
-- Work mode: collaborative
-- Base branch: main
-- Branch: feat/nginx-auth-slice-parity
-- Phase: done (awaiting merge)
-- Status: review
+- **TASK-STRANGLER-NGINX-AUTH-001** — nginx `/api/slice/auth` → `auth-service:3020`; docs parity; **validation re-run 2026-05-05** (`pnpm --filter @oat/web-bff test`, `pnpm --filter @oat/auth-service test`, 120s cap). Status **done** in `tasks.json` (integration = merge PR to `main`).
 
-## Objective
+## Active backlog (next)
 
-Align optional nginx gateway with Web BFF auth slice routing (ADR 0003).
+- **TASK-RBAC-NEXT-002** — architect; ADR + diagram; **work on branch `feat/adr-rbac-membership-boundary`** (`docs/adr/0004` not on nginx branch until that PR merges).
 
 ## Next Action
 
-Open PR `feat/nginx-auth-slice-parity` → `main`; next backlog: TASK-RBAC-NEXT-002.
+1. Open/merge **PR** `feat/nginx-auth-slice-parity` → `main`.
+2. Open/merge **PR** `feat/adr-rbac-membership-boundary` → `main` (or rebase after nginx) for TASK-RBAC-NEXT-002.
