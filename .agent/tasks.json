@@ -131,7 +131,8 @@
     "evidence_refs": [
       "docs/adr/0005-auth-session-strangler-phased-cutover.md",
       "design/strangler-vs-ats-diagram.md — Auth Service row → ADR 0005",
-      "services/auth-service/README.md — cross-link to ADR 0005"
+      "services/auth-service/README.md — cross-link to ADR 0005",
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR Status **Proposed** and awaiting merge/`Accepted`→ keep **review** until then."
     ],
     "validation": ["Docs-only PR reviewed", "Strangler diagram + services README auth-service section consistent"],
     "risk_level": "medium",
@@ -163,7 +164,8 @@
     ],
     "evidence_refs": [
       "docs/adr/0006-job-service-vs-pipeline-service-split.md",
-      "design/strangler-vs-ats-diagram.md — Job/Pipeline pilot row + How to use → ADR 0006"
+      "design/strangler-vs-ats-diagram.md — Job/Pipeline pilot row + How to use → ADR 0006",
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge."
     ],
     "validation": ["ADR merged; diagram cross-reference present"],
     "risk_level": "medium",
@@ -196,7 +198,8 @@
     ],
     "evidence_refs": [
       "docs/adr/0007-realtime-gateway-extraction.md",
-      "design/strangler-vs-ats-diagram.md — Realtime row → ADR 0007 + ADR 0002"
+      "design/strangler-vs-ats-diagram.md — Realtime row → ADR 0007 + ADR 0002",
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge."
     ],
     "validation": ["Doc review + security pass on Redis + JWT for sockets"],
     "risk_level": "high",
@@ -212,9 +215,9 @@
     "title": "Implement membership/RBAC read API split per ADR 0004 (account-service vs new service)",
     "type": "implementation",
     "priority": 6,
-    "status": "pending",
+    "status": "in_progress",
     "role": "engineer",
-    "phase": "discover",
+    "phase": "implement",
     "acceptance_criteria": [
       "Behavior matches ADR 0004: scoped APIs for membership/role reads used by BFF or regional services",
       "apps/api guards updated or shimmed per ADR; tests for moved surface",
@@ -226,7 +229,9 @@
       "services/account-service",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-05: ADR 0004 optional probe — `GET /api/accounts/current/membership` on account-service; BFF already routes `/api/accounts/current/*`. Tests: unit + integration (120s cap)."
+    ],
     "validation": [
       "pnpm --filter @oat/account-service test && test:integration",
       "pnpm --filter @oat/web-bff test",
@@ -238,16 +243,16 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/account-service", "apps/api/src/common", "services/web-bff/src/routing.ts"],
-    "handoff": "Depends on TASK-RBAC-NEXT-002 done (ADR on main) and architect sign-off on API shapes."
+    "handoff": "Slice 1 done: read-only membership probe. Next: adopt at BFF/edge if needed; monolith/shim parity + broader reads per ADR 0004 backlog."
   },
   {
     "id": "TASK-WEB-BFF-HARDEN-008",
     "title": "Web BFF hardening: routing regression tests + nginx parity checklist",
     "type": "implementation",
     "priority": 7,
-    "status": "review",
+    "status": "done",
     "role": "engineer",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "Documented checklist (services/web-bff or api-gateway README) aligning BFF rules with nginx for non-rewrite paths",
       "Additional automated tests only where gaps exist (routing / aggregated-health edge cases)",
@@ -259,7 +264,8 @@
       "design/strangler-vs-ats-diagram.md"
     ],
     "evidence_refs": [
-      "services/api-gateway/README.md — nginx vs `routing.ts` parity table (2026-05-05)"
+      "services/api-gateway/README.md — nginx vs `routing.ts` parity table (2026-05-05)",
+      "2026-05-05 wave-2: `pnpm --filter @oat/web-bff test` (120s cap, green); no routing gaps identified requiring new tests beyond existing suite."
     ],
     "validation": ["pnpm --filter @oat/web-bff test"],
     "risk_level": "low",
@@ -275,15 +281,17 @@
     "title": "Reconcile PRD frontmatter prd_status with substantive body",
     "type": "product",
     "priority": 8,
-    "status": "pending",
+    "status": "done",
     "role": "product",
-    "phase": "plan",
+    "phase": "done",
     "acceptance_criteria": [
       ".agent/prd/prd.md YAML prd_status set to draft or active (or external) per Agent.md rules after user-appropriate confirm",
       "Revision log entry if metadata changes"
     ],
     "context_refs": [".agent/prd/prd.md", ".agent/Agent.md"],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-05: `.agent/prd/prd.md` — `prd_status: draft`; revision log entry (metadata only)."
+    ],
     "validation": ["Readable PRD; planner tasks can cite prd.md without contradiction"],
     "risk_level": "low",
     "context_budget": "small",
@@ -291,7 +299,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": [".agent/prd/prd.md"],
-    "handoff": "Improves backlog prioritization discipline for microservices workstreams."
+    "handoff": "Frontmatter matches substantive body for harness consumers."
   },
   {
     "id": "TASK-AUTH-SESSION-SLICE-010",

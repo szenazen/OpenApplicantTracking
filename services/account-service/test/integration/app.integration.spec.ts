@@ -145,6 +145,11 @@ describe('account-service HTTP (integration)', () => {
     expect(res.body.some((m: { email: string }) => m.email === adminEmail)).toBe(true);
   });
 
+  it('GET /api/accounts/current/membership (read-only probe)', async () => {
+    const res = await request(app.getHttpServer()).get('/api/accounts/current/membership').set(auth()).expect(200);
+    expect(res.body).toEqual({ accountId, role: 'admin', status: 'ACTIVE' });
+  });
+
   it('GET /api/accounts/current/assignable-invite-roles', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/accounts/current/assignable-invite-roles')

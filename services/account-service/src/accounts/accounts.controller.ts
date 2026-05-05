@@ -36,6 +36,13 @@ export class AccountsController {
     return this.svc.listMembers(accountId);
   }
 
+  /** Read-only ACTIVE membership probe for JWT + `x-account-id` (ADR 0004). */
+  @Get('current/membership')
+  @UseGuards(AuthGuard('jwt'), AccountContextGuard)
+  currentMembership(@AccountId() accountId: string, @MembershipRoleName() role: string) {
+    return { accountId, role, status: 'ACTIVE' as const };
+  }
+
   @Get('current/assignable-invite-roles')
   @UseGuards(AuthGuard('jwt'), AccountContextGuard, AccountAdminOrManagerGuard)
   assignableInviteRoles(@MembershipRoleName() membershipRole: string) {
