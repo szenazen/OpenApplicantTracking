@@ -6,7 +6,7 @@
 
 ## Active backlog (next)
 
-- **TASK-RBAC-NEXT-002** — architect; ADR + diagram; **work on branch `feat/adr-rbac-membership-boundary`** (`docs/adr/0004` not on nginx branch until that PR merges).
+- **TASK-RBAC-NEXT-002** — status **`review`**: acceptance met on **`feat/adr-rbac-membership-boundary`** (pushed); merge PR for ADR/docs, then mark **`done`** once on **`main`**.
 
 ## Next Action
 

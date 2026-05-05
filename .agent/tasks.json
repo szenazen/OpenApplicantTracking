@@ -39,9 +39,9 @@
     "title": "Decide RBAC/account membership read API split (diagram RBAC vs monolith guards)",
     "type": "architecture",
     "priority": 2,
-    "status": "pending",
+    "status": "review",
     "role": "architect",
-    "phase": "discover",
+    "phase": "review",
     "acceptance_criteria": [
       "ADR or strangler diagram update for target home of AccountGuard-equivalent APIs",
       "List of endpoints that stay in apps/api vs account-service extensions"
@@ -53,9 +53,13 @@
       "docs/adr/0004-account-membership-rbac-boundary.md"
     ],
     "evidence_refs": [
-      "Draft ADR 0004 + diagram updates on branch feat/adr-rbac-membership-boundary (merge to main separately or stack after nginx PR)"
+      "Artifacts on branch feat/adr-rbac-membership-boundary (see origin; harness commit documents validation run 2026-05-05); merge that PR.",
+      "This branch excludes ADR files by design — do not mark done until feat/adr-rbac-membership-boundary is merged into main."
     ],
-    "validation": ["docs/adr/0004-account-membership-rbac-boundary.md once on main"],
+    "validation": [
+      "Merge PR feat/adr-rbac-membership-boundary → main (ADR 0004 + diagram on mainline)",
+      "pnpm --filter @oat/web-bff test; pnpm --filter @oat/account-service test — run on adb branch head before/during review"
+    ],
     "risk_level": "medium",
     "context_budget": "medium",
     "work_mode": "collaborative",
@@ -65,6 +69,6 @@
       "docs/adr/0004-account-membership-rbac-boundary.md",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "handoff": "ADR 0004 defines AccountGuard vs AccountContextGuard; land via feat/adr-rbac-membership-boundary PR."
+    "handoff": "Open/merge PR feat/adr-rbac-membership-boundary; after main contains ADR 0004, mark task done in canonical queue."
   }
 ]
