@@ -112,9 +112,9 @@
     "title": "ADR: Auth Service migration (login, refresh, sessions vs verify-only pilot)",
     "type": "planning",
     "priority": 3,
-    "status": "pending",
+    "status": "review",
     "role": "architect",
-    "phase": "plan",
+    "phase": "review",
     "acceptance_criteria": [
       "New ADR under docs/adr/ describing phased cutover from apps/api auth to auth-service (JWT/session store, BFF flags, rollback)",
       "design/strangler-vs-ats-diagram.md links to ADR; diagram Auth Service row updated with migration state",
@@ -125,9 +125,14 @@
       "services/auth-service",
       "apps/api/src/modules/auth",
       "services/web-bff/src/routing.ts",
-      "docs/adr/0003-web-bff-edge-strangler.md"
+      "docs/adr/0003-web-bff-edge-strangler.md",
+      "docs/adr/0005-auth-session-strangler-phased-cutover.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "docs/adr/0005-auth-session-strangler-phased-cutover.md",
+      "design/strangler-vs-ats-diagram.md — Auth Service row → ADR 0005",
+      "services/auth-service/README.md — cross-link to ADR 0005"
+    ],
     "validation": ["Docs-only PR reviewed", "Strangler diagram + services README auth-service section consistent"],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -135,16 +140,16 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md", "services/auth-service/README.md"],
-    "handoff": "Prerequisite for TASK-AUTH-SESSION-SLICE-009 implementation work."
+    "handoff": "Prerequisite for TASK-AUTH-SESSION-SLICE-010 implementation work."
   },
   {
     "id": "TASK-ADR-JOB-PIPELINE-SPLIT-005",
     "title": "ADR: Split Job Service vs Pipeline Service (when to break pipeline-service)",
     "type": "planning",
     "priority": 4,
-    "status": "pending",
+    "status": "review",
     "role": "architect",
-    "phase": "plan",
+    "phase": "review",
     "acceptance_criteria": [
       "ADR records split criteria, data ownership (two DBs vs shared events), and BFF routing implications",
       "design/strangler-vs-ats-diagram.md pilot compression section updated with decision or reaffirmed deferral"
@@ -153,9 +158,13 @@
       "design/ATS-design.drawio.xml",
       "design/strangler-vs-ats-diagram.md",
       "services/pipeline-service",
-      "docs/adr/0003-web-bff-edge-strangler.md"
+      "docs/adr/0003-web-bff-edge-strangler.md",
+      "docs/adr/0006-job-service-vs-pipeline-service-split.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "docs/adr/0006-job-service-vs-pipeline-service-split.md",
+      "design/strangler-vs-ats-diagram.md — Job/Pipeline pilot row + How to use → ADR 0006"
+    ],
     "validation": ["ADR merged; diagram cross-reference present"],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -170,9 +179,9 @@
     "title": "ADR: Realtime Gateway extraction (Socket.IO, Redis adapter, regional fan-out)",
     "type": "architecture",
     "priority": 5,
-    "status": "pending",
+    "status": "review",
     "role": "architect",
-    "phase": "plan",
+    "phase": "review",
     "acceptance_criteria": [
       "ADR for moving /realtime off apps/api toward diagram Realtime Gateway Service",
       "References docs/adr/0002-realtime-kanban-via-socketio.md if still current",
@@ -182,9 +191,13 @@
       "design/ATS-design.drawio.xml",
       "apps/api/src/modules/realtime",
       "docs/adr/0002-realtime-kanban-via-socketio.md",
-      "services/web-bff/src/routing.ts"
+      "services/web-bff/src/routing.ts",
+      "docs/adr/0007-realtime-gateway-extraction.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "docs/adr/0007-realtime-gateway-extraction.md",
+      "design/strangler-vs-ats-diagram.md — Realtime row → ADR 0007 + ADR 0002"
+    ],
     "validation": ["Doc review + security pass on Redis + JWT for sockets"],
     "risk_level": "high",
     "context_budget": "large",
@@ -192,7 +205,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Feeds TASK-REALTIME-GATEWAY-010; do not start implementation until ADR accepted."
+    "handoff": "Feeds TASK-REALTIME-GATEWAY-011; do not start implementation until ADR accepted."
   },
   {
     "id": "TASK-RBAC-MEMBERSHIP-API-007",
@@ -232,9 +245,9 @@
     "title": "Web BFF hardening: routing regression tests + nginx parity checklist",
     "type": "implementation",
     "priority": 7,
-    "status": "pending",
+    "status": "review",
     "role": "engineer",
-    "phase": "discover",
+    "phase": "review",
     "acceptance_criteria": [
       "Documented checklist (services/web-bff or api-gateway README) aligning BFF rules with nginx for non-rewrite paths",
       "Additional automated tests only where gaps exist (routing / aggregated-health edge cases)",
@@ -245,7 +258,9 @@
       "services/api-gateway/nginx.conf",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "services/api-gateway/README.md — nginx vs `routing.ts` parity table (2026-05-05)"
+    ],
     "validation": ["pnpm --filter @oat/web-bff test"],
     "risk_level": "low",
     "context_budget": "medium",

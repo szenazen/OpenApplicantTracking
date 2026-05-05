@@ -12,3 +12,5 @@ BFF routes here when `AUTH_SLICE_ENABLED=1` and `AUTH_SERVICE_URL` is set.
 **Env:** `JWT_SECRET` (required for meaningful verify; Compose overlay sets default), optionally `JWT_ACCESS_TTL` (default `15m`, used for JwtModule symmetry with API).
 
 See [../README.md](../README.md) and [../../docs/deployment-modes.md](../../docs/deployment-modes.md).
+
+**Strangler cutover** (login / refresh / sessions vs this pilot): [ADR 0005](../../docs/adr/0005-auth-session-strangler-phased-cutover.md).

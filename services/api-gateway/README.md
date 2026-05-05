@@ -20,6 +20,18 @@ changing one, update the other.
 
 **Mirrored paths (high level)**
 
+| Traffic | nginx (`nginx.conf`) | Web BFF (`routing.ts`) |
+|--------|----------------------|-------------------------|
+| `/api/accounts/current/*`, `GET /api/accounts/:id`, `/api/invitations`, `GET/PUT/… /api/platform/accounts` (not POST) | `account_service` | `account` |
+| `POST /api/accounts`, `POST /api/platform/accounts` | `monolith` | `monolith` |
+| Prefix `/api/slice/auth` | `auth_service` | `auth` when `AUTH_SLICE_ENABLED` |
+| `/realtime` (WebSocket / Socket.IO) | `monolith` | `monolith` |
+| `GET /api/users/me` | *Optional* commented block → `user_service` | `user` when `USER_SLICE_ENABLED` |
+| `/api/slice/pipeline`, `GET/HEAD /api/pipelines`, `GET /api/jobs(…)` | `monolith` (no URI rewrite in nginx) | `pipeline` when slice + `BFF_*` flags |
+| Everything else under `/` | `monolith` | `monolith` |
+
+**Legend:** nginx mirrors **account**, **invitation**, **platform list**, and **auth slice** only. **Pipeline / jobs public rewrites** and **`USER_SLICE`** routing exist **only** in the BFF (see comments in `nginx.conf`).
+
 - Global **account-service**: `/api/accounts/current/*`, `GET /api/accounts/:id` (single segment), `/api/invitations`, `GET /api/platform/accounts`; `POST /api/platform/accounts` and `POST /api/accounts` → monolith.
 - **Auth slice**: `GET|POST /api/slice/auth/*` (probe, `verify-access`) → **`auth-service:3020`** (`POST /api/slice/auth/verify-access`, etc.) — aligns with **`AUTH_SLICE_ENABLED`** behaviour on Web BFF; **session login/register remain on backup `apps/api`**, not auth-service.
 

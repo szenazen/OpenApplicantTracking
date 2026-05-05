@@ -1,15 +1,14 @@
 # Current task
 
-## Recently completed
+## Recently completed (this branch / session)
 
-- **TASK-MERGE-HARNESS-003** — both strangler feature branches merged into **`main`** with unified agent queue.
-- **TASK-RBAC-NEXT-002** — **done**; **ADR 0004** and diagram updates are on **`main`**.
-
-## Active backlog (next)
-
-- **TASK-ADR-AUTH-MIGRATION-004** — draft **ADR 0005** (auth-session strangler, BFF flags, JWT compat, rollback, MFA non-goals); link from strangler diagram Auth row.
+- **TASK-MERGE-HARNESS-003** — merged both strangler PR branches into **`main`** and pushed.
+- **TASK-RBAC-NEXT-002** — **done**; **ADR 0004** on **`main`**.
+- **TASK-ADR-AUTH-MIGRATION-004**, **TASK-ADR-JOB-PIPELINE-SPLIT-005**, **TASK-ADR-REALTIME-GATEWAY-006** — ADRs **0005–0007** drafted; **`review`** in queue.
+- **TASK-WEB-BFF-HARDEN-008** — nginx vs BFF parity **table** in **`services/api-gateway/README.md`**; **`review`**.
 
 ## Next actions
 
-1. Push **`main`** to **`origin`**.
-2. Implement ADR docs + `tasks.json` / HANDOFF updates for auth, job/pipeline split, realtime gateway (priorities 3–5).
+1. PR / merge **`feat/agent-harness-wave`** → **`main`**.
+2. Change ADR status **Proposed → Accepted** after review; move ADR tasks to **`done`** if acceptance criteria met.
+3. Optional: `pnpm --filter @oat/web-bff test` on CI or locally before merge.
