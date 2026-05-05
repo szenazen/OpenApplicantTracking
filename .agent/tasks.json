@@ -1,5 +1,40 @@
 [
   {
+    "id": "TASK-MERGE-HARNESS-003",
+    "title": "Merge open strangler PRs and consolidate canonical tasks.json on main",
+    "type": "devops",
+    "priority": 0,
+    "status": "done",
+    "role": "devops",
+    "phase": "done",
+    "acceptance_criteria": [
+      "PR feat/nginx-auth-slice-parity merged to main (or equivalent nginx auth slice changes on mainline)",
+      "PR feat/adr-rbac-membership-boundary merged to main with docs/adr/0004 + diagram updates",
+      "Single source-of-truth .agent/tasks.json on main: dedupe branch-specific rows; set TASK-RBAC-NEXT-002 status to done when ADR 0004 is on main",
+      "CI passes on main after merges"
+    ],
+    "context_refs": [
+      "design/strangler-vs-ats-diagram.md",
+      "design/ATS-design.drawio.xml",
+      "docs/adr/0003-web-bff-edge-strangler.md",
+      ".agent/Agent.md"
+    ],
+    "evidence_refs": [
+      "2026-05-05: `git merge --no-ff origin/feat/nginx-auth-slice-parity` then `git merge --no-ff origin/feat/adr-rbac-membership-boundary` on local `main`; add/add conflicts in `.agent/state/*` and `.agent/tasks.json` resolved with canonical full queue; `docs/adr/0004-account-membership-rbac-boundary.md` + diagram updates staged from ADR branch."
+    ],
+    "validation": [
+      "GitHub: both feature branches integrated into main; git pull main shows unified harness",
+      "pnpm install --frozen-lockfile && pnpm --filter @oat/web-bff test (optional smoke on main head)"
+    ],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": [".agent/tasks.json", ".agent/state/HANDOFF.md", ".agent/state/CURRENT_TASK.md"],
+    "handoff": "Completed locally: both feature branches merged into main with unified `.agent/tasks.json`; push `main` to origin to align remote."
+  },
+  {
     "id": "TASK-STRANGLER-NGINX-AUTH-001",
     "title": "Optional nginx: proxy /api/slice/auth to auth-service",
     "type": "implementation",
@@ -32,16 +67,16 @@
     "base_branch": "main",
     "branch": "feat/nginx-auth-slice-parity",
     "file_scope": ["services/api-gateway/nginx.conf", "services/api-gateway/README.md", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Merge PR feat/nginx-auth-slice-parity → main; optional nginx edge parity for /api/slice/auth is complete on branch."
+    "handoff": "Landed on main via merge 2026-05-05; nginx reference gateway proxies `/api/slice/auth` to auth-service per ADR 0003 alignment."
   },
   {
     "id": "TASK-RBAC-NEXT-002",
     "title": "Decide RBAC/account membership read API split (diagram RBAC vs monolith guards)",
     "type": "architecture",
     "priority": 2,
-    "status": "review",
+    "status": "done",
     "role": "architect",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "ADR or strangler diagram update for target home of AccountGuard-equivalent APIs",
       "List of endpoints that stay in apps/api vs account-service extensions"
@@ -53,12 +88,13 @@
       "docs/adr/0004-account-membership-rbac-boundary.md"
     ],
     "evidence_refs": [
-      "Artifacts on branch feat/adr-rbac-membership-boundary (see origin; harness commit documents validation run 2026-05-05); merge that PR.",
-      "This branch excludes ADR files by design — do not mark done until feat/adr-rbac-membership-boundary is merged into main."
+      "docs/adr/0004-account-membership-rbac-boundary.md on main after merge of `feat/adr-rbac-membership-boundary`",
+      "design/strangler-vs-ats-diagram.md — RBAC row links to ADR 0004",
+      "Prior validation (pre-merge): pnpm --filter @oat/web-bff test; pnpm --filter @oat/account-service test (2026-05-05, branch head)"
     ],
     "validation": [
-      "Merge PR feat/adr-rbac-membership-boundary → main (ADR 0004 + diagram on mainline)",
-      "pnpm --filter @oat/web-bff test; pnpm --filter @oat/account-service test — run on adb branch head before/during review"
+      "ADR 0004 + diagram updates on mainline",
+      "pnpm --filter @oat/web-bff test; pnpm --filter @oat/account-service test (re-run on main if regressions suspected)"
     ],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -69,6 +105,487 @@
       "docs/adr/0004-account-membership-rbac-boundary.md",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "handoff": "Open/merge PR feat/adr-rbac-membership-boundary; after main contains ADR 0004, mark task done in canonical queue."
+    "handoff": "ADR 0004 on main; next: TASK-RBAC-MEMBERSHIP-API-007 per ADR 0004."
+  },
+  {
+    "id": "TASK-ADR-AUTH-MIGRATION-004",
+    "title": "ADR: Auth Service migration (login, refresh, sessions vs verify-only pilot)",
+    "type": "planning",
+    "priority": 3,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "New ADR under docs/adr/ describing phased cutover from apps/api auth to auth-service (JWT/session store, BFF flags, rollback)",
+      "design/strangler-vs-ats-diagram.md links to ADR; diagram Auth Service row updated with migration state",
+      "Explicit non-goals (e.g. MFA phase) if deferred"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "services/auth-service",
+      "apps/api/src/modules/auth",
+      "services/web-bff/src/routing.ts",
+      "docs/adr/0003-web-bff-edge-strangler.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["Docs-only PR reviewed", "Strangler diagram + services README auth-service section consistent"],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md", "services/auth-service/README.md"],
+    "handoff": "Prerequisite for TASK-AUTH-SESSION-SLICE-009 implementation work."
+  },
+  {
+    "id": "TASK-ADR-JOB-PIPELINE-SPLIT-005",
+    "title": "ADR: Split Job Service vs Pipeline Service (when to break pipeline-service)",
+    "type": "planning",
+    "priority": 4,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "ADR records split criteria, data ownership (two DBs vs shared events), and BFF routing implications",
+      "design/strangler-vs-ats-diagram.md pilot compression section updated with decision or reaffirmed deferral"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "design/strangler-vs-ats-diagram.md",
+      "services/pipeline-service",
+      "docs/adr/0003-web-bff-edge-strangler.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["ADR merged; diagram cross-reference present"],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
+    "handoff": "If ADR says split now, spawn follow-up implementation tasks; else park until scale warrants."
+  },
+  {
+    "id": "TASK-ADR-REALTIME-GATEWAY-006",
+    "title": "ADR: Realtime Gateway extraction (Socket.IO, Redis adapter, regional fan-out)",
+    "type": "architecture",
+    "priority": 5,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "ADR for moving /realtime off apps/api toward diagram Realtime Gateway Service",
+      "References docs/adr/0002-realtime-kanban-via-socketio.md if still current",
+      "BFF vs gateway ownership for browser connections clarified"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "apps/api/src/modules/realtime",
+      "docs/adr/0002-realtime-kanban-via-socketio.md",
+      "services/web-bff/src/routing.ts"
+    ],
+    "evidence_refs": [],
+    "validation": ["Doc review + security pass on Redis + JWT for sockets"],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
+    "handoff": "Feeds TASK-REALTIME-GATEWAY-010; do not start implementation until ADR accepted."
+  },
+  {
+    "id": "TASK-RBAC-MEMBERSHIP-API-007",
+    "title": "Implement membership/RBAC read API split per ADR 0004 (account-service vs new service)",
+    "type": "implementation",
+    "priority": 6,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "Behavior matches ADR 0004: scoped APIs for membership/role reads used by BFF or regional services",
+      "apps/api guards updated or shimmed per ADR; tests for moved surface",
+      "No cross-DB reads from wrong service per service-ownership rule"
+    ],
+    "context_refs": [
+      "docs/adr/0004-account-membership-rbac-boundary.md",
+      "apps/api/src/common/account.guard.ts",
+      "services/account-service",
+      "design/strangler-vs-ats-diagram.md"
+    ],
+    "evidence_refs": [],
+    "validation": [
+      "pnpm --filter @oat/account-service test && test:integration",
+      "pnpm --filter @oat/web-bff test",
+      "pnpm --filter @oat/api test (smoke for guard paths)"
+    ],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/account-service", "apps/api/src/common", "services/web-bff/src/routing.ts"],
+    "handoff": "Depends on TASK-RBAC-NEXT-002 done (ADR on main) and architect sign-off on API shapes."
+  },
+  {
+    "id": "TASK-WEB-BFF-HARDEN-008",
+    "title": "Web BFF hardening: routing regression tests + nginx parity checklist",
+    "type": "implementation",
+    "priority": 7,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "Documented checklist (services/web-bff or api-gateway README) aligning BFF rules with nginx for non-rewrite paths",
+      "Additional automated tests only where gaps exist (routing / aggregated-health edge cases)",
+      "No behavior change unless fixing a verified gap"
+    ],
+    "context_refs": [
+      "services/web-bff/src/routing.ts",
+      "services/api-gateway/nginx.conf",
+      "design/strangler-vs-ats-diagram.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["pnpm --filter @oat/web-bff test"],
+    "risk_level": "low",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/web-bff", "services/api-gateway/README.md"],
+    "handoff": "Quality gate before expanding route surface."
+  },
+  {
+    "id": "TASK-PRD-FRONTMATTER-009",
+    "title": "Reconcile PRD frontmatter prd_status with substantive body",
+    "type": "product",
+    "priority": 8,
+    "status": "pending",
+    "role": "product",
+    "phase": "plan",
+    "acceptance_criteria": [
+      ".agent/prd/prd.md YAML prd_status set to draft or active (or external) per Agent.md rules after user-appropriate confirm",
+      "Revision log entry if metadata changes"
+    ],
+    "context_refs": [".agent/prd/prd.md", ".agent/Agent.md"],
+    "evidence_refs": [],
+    "validation": ["Readable PRD; planner tasks can cite prd.md without contradiction"],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": [".agent/prd/prd.md"],
+    "handoff": "Improves backlog prioritization discipline for microservices workstreams."
+  },
+  {
+    "id": "TASK-AUTH-SESSION-SLICE-010",
+    "title": "Implement auth session slice (login/refresh) behind BFF flags per auth migration ADR",
+    "type": "implementation",
+    "priority": 9,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "auth-service and BFF routing support pilot login/refresh paths as defined in TASK-ADR-AUTH-MIGRATION-004",
+      "Shared JWT_SECRET compatibility with apps/api during strangler; rollback path documented",
+      "Contract tests + E2E login path for at least one flow"
+    ],
+    "context_refs": [
+      "TASK-ADR-AUTH-MIGRATION-004",
+      "services/auth-service",
+      "apps/api/src/modules/auth",
+      "services/web-bff/src/routing.ts",
+      "design/ATS-design.drawio.xml"
+    ],
+    "evidence_refs": [],
+    "validation": [
+      "pnpm --filter @oat/auth-service test",
+      "pnpm --filter @oat/web-bff test",
+      "pnpm --filter @oat/api test",
+      "Targeted E2E or script per ADR"
+    ],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/auth-service", "services/web-bff", "apps/api/src/modules/auth"],
+    "handoff": "Blocked until TASK-ADR-AUTH-MIGRATION-004 is done and reviewed."
+  },
+  {
+    "id": "TASK-REALTIME-GATEWAY-011",
+    "title": "Implement Realtime Gateway extraction tranche 1 per realtime ADR",
+    "type": "implementation",
+    "priority": 10,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "Per TASK-ADR-REALTIME-GATEWAY-006: deployable path for Kanban live updates off monolith boundary or documented incremental step",
+      "Socket auth and Redis adapter concerns addressed in code or runbook",
+      "No production regression for /realtime without feature flag"
+    ],
+    "context_refs": [
+      "TASK-ADR-REALTIME-GATEWAY-006",
+      "apps/api/src/modules/realtime",
+      "design/ATS-design.drawio.xml",
+      "docs/adr/0002-realtime-kanban-via-socketio.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["Integration smoke for websocket path; unit tests for auth handshake helpers if extracted"],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["apps/api/src/modules/realtime", "services/"],
+    "handoff": "Blocked until realtime ADR is accepted."
+  },
+  {
+    "id": "TASK-CANDIDATE-SLICE-P1-012",
+    "title": "Regional Candidate domain strangler phase 1 (read path or event alignment)",
+    "type": "implementation",
+    "priority": 11,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "Scoped deliverable per strangler table: read path from owned store or documented drain step toward Candidate Service in diagram",
+      "No breaking change to apps/web without BFF flag",
+      "ADR reference or update in docs/adr if new boundary"
+    ],
+    "context_refs": [
+      "design/strangler-vs-ats-diagram.md",
+      "design/ATS-design.drawio.xml",
+      "services/pipeline-service",
+      "apps/api"
+    ],
+    "evidence_refs": [],
+    "validation": ["Package tests for touched services", "Manual QA notes in PR"],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/pipeline-service", "apps/api", "services/web-bff"],
+    "handoff": "Sequence after pipeline/ownership ADRs stable."
+  },
+  {
+    "id": "TASK-JOB-APP-SLICE-P1-013",
+    "title": "Job Application Service strangler phase 1 (cards/read vs writes per diagram)",
+    "type": "implementation",
+    "priority": 12,
+    "status": "pending",
+    "role": "engineer",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "Align Kanban card read path with pipeline-slice or monolith per strangler doc; writes remain gated",
+      "Kafka/event contract noted if used",
+      "Feature flag or BFF routing documented"
+    ],
+    "context_refs": [
+      "design/strangler-vs-ats-diagram.md",
+      "services/pipeline-service",
+      "apps/api"
+    ],
+    "evidence_refs": [],
+    "validation": ["Relevant package tests green"],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/pipeline-service", "apps/api", "services/web-bff"],
+    "handoff": "Often coupled with candidate slice — coordinate ordering with architect."
+  },
+  {
+    "id": "TASK-SKILLS-CATALOG-014",
+    "title": "Skills catalog service (global control plane) — architecture + phased API",
+    "type": "architecture",
+    "priority": 13,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "ADR or design note for global Skills vs Regional Skills Read in diagram; data ownership",
+      "Implementation task breakdown for engineer (optional child tasks later)"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "apps/api",
+      "services/account-service"
+    ],
+    "evidence_refs": [],
+    "validation": ["Stakeholder review of scope against PRD skills requirements"],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
+    "handoff": "Diagram Skills service box → backlog; implementation follows ADR."
+  },
+  {
+    "id": "TASK-FILE-SERVICE-015",
+    "title": "File Service ownership (uploads, signed URLs, Minio policy) — design + strangler step",
+    "type": "architecture",
+    "priority": 14,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "Document who owns presigned URL flow vs monolith today; ADR or extension to ADR 0003",
+      "Security review hooks for SSRF/path traversal if new edge"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "apps/api",
+      "docker-compose.yml"
+    ],
+    "evidence_refs": [],
+    "validation": ["Security role sign-off on draft"],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "apps/api"],
+    "handoff": "Implementation task to be added after ADR."
+  },
+  {
+    "id": "TASK-KAFKA-GOVERNANCE-016",
+    "title": "Kafka consumers governance (topics, idempotency, DLQ, alignment with pipeline events)",
+    "type": "devops",
+    "priority": 15,
+    "status": "pending",
+    "role": "devops",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "Document topic naming, consumer ownership, and retry policy vs services/pipeline-service DomainEventsService",
+      "Optional: lint or checklist in docs/deployment-modes.md"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "services/pipeline-service/src/domain-events",
+      "services/kafka-ping",
+      ".cursor/skills/reliability-patterns/SKILL.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["Runbook reviewed by engineer"],
+    "risk_level": "medium",
+    "context_budget": "medium",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/", "services/pipeline-service"],
+    "handoff": "Supports diagram Kafka async communication maturity."
+  },
+  {
+    "id": "TASK-ACCOUNT-TENANT-PROVISION-017",
+    "title": "Tenant provisioning: POST /api/platform/accounts extraction from monolith",
+    "type": "implementation",
+    "priority": 16,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "ADR for regional DB provisioning and routing service ownership (high risk)",
+      "Explicit coordination with account-service and backup-api strangler docs"
+    ],
+    "context_refs": [
+      "services/web-bff/src/routing.ts",
+      "apps/api",
+      "services/account-service",
+      "design/strangler-vs-ats-diagram.md",
+      "design/ATS-design.drawio.xml"
+    ],
+    "evidence_refs": [],
+    "validation": ["ADR review before coding; security review mandatory"],
+    "risk_level": "high",
+    "context_budget": "large",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "apps/api", "services/web-bff"],
+    "handoff": "Do not implement provisioning move without ADR — regional blast radius."
+  },
+  {
+    "id": "TASK-SEARCH-ADR-018",
+    "title": "Internal/external search ADR (Elasticsearch or future) — research only",
+    "type": "research",
+    "priority": 17,
+    "status": "pending",
+    "role": "architect",
+    "phase": "discover",
+    "acceptance_criteria": [
+      "Short ADR or research doc on search service placement in diagram vs cost",
+      "Defer full implementation until core slices stable (explicit)"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      ".agent/prd/prd.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["Document linked from strangler diagram"],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
+    "handoff": "Low priority until P0–P12 momentum."
+  },
+  {
+    "id": "TASK-WORKERS-DEFERRED-019",
+    "title": "Notification, Audit, CV parser workers — backlog placeholder (no implementation until triggered)",
+    "type": "planning",
+    "priority": 18,
+    "status": "pending",
+    "role": "planner",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "When product priorities require: split into separate tasks with acceptance criteria",
+      "Until then: reference diagram boxes and strangler doc only"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "design/strangler-vs-ats-diagram.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["Tasks split from this placeholder when PRD demands"],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": [],
+    "handoff": "Parking lot for diagram workers; cancel or spawn children when scope firm."
+  },
+  {
+    "id": "TASK-MOBILE-BFF-DEFERRED-099",
+    "title": "Mobile BFF — deferred until mobile client (diagram Mobile BFF)",
+    "type": "planning",
+    "priority": 99,
+    "status": "pending",
+    "role": "architect",
+    "phase": "plan",
+    "acceptance_criteria": [
+      "No implementation until product greenlights mobile",
+      "When active: mirror web BFF strangler patterns per docs/adr/0003"
+    ],
+    "context_refs": [
+      "design/ATS-design.drawio.xml",
+      "docs/adr/0003-web-bff-edge-strangler.md"
+    ],
+    "evidence_refs": [],
+    "validation": ["N/A until mobile scope"],
+    "risk_level": "low",
+    "context_budget": "small",
+    "work_mode": "collaborative",
+    "base_branch": "main",
+    "branch": null,
+    "file_scope": ["services/"],
+    "handoff": "Placeholder priority 99; do not schedule in current microservices wave."
   }
 ]

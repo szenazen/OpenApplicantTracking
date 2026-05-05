@@ -1,14 +1,15 @@
-# Current Task
+# Current task
 
 ## Recently completed
 
-- **TASK-STRANGLER-NGINX-AUTH-001** — nginx `/api/slice/auth` → `auth-service:3020`; docs parity; **validation re-run 2026-05-05** (`pnpm --filter @oat/web-bff test`, `pnpm --filter @oat/auth-service test`, 120s cap). Status **done** in `tasks.json` (integration = merge PR to `main`).
+- **TASK-MERGE-HARNESS-003** — both strangler feature branches merged into **`main`** with unified agent queue.
+- **TASK-RBAC-NEXT-002** — **done**; **ADR 0004** and diagram updates are on **`main`**.
 
 ## Active backlog (next)
 
-- **TASK-RBAC-NEXT-002** — status **`review`**: acceptance met on **`feat/adr-rbac-membership-boundary`** (pushed); merge PR for ADR/docs, then mark **`done`** once on **`main`**.
+- **TASK-ADR-AUTH-MIGRATION-004** — draft **ADR 0005** (auth-session strangler, BFF flags, JWT compat, rollback, MFA non-goals); link from strangler diagram Auth row.
 
-## Next Action
+## Next actions
 
-1. Open/merge **PR** `feat/nginx-auth-slice-parity` → `main`.
-2. Open/merge **PR** `feat/adr-rbac-membership-boundary` → `main` (or rebase after nginx) for TASK-RBAC-NEXT-002.
+1. Push **`main`** to **`origin`**.
+2. Implement ADR docs + `tasks.json` / HANDOFF updates for auth, job/pipeline split, realtime gateway (priorities 3–5).
