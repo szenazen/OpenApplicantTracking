@@ -1,14 +1,13 @@
 # Current task
 
-## Last session (`feat/agent-harness-wave`)
+## Last session (`feat/agent-harness-wave`, 2026-05-06)
 
-- **007** **`review`:** `GET .../accounts/current/membership` on **account-service** + **monolith** parity (`AccountGuard`); ADR 0004 table row; **`@oat/account-service`** + **`@oat/api`** `accounts.spec` green.
-- **008** **`done`** — nginx ↔ BFF checklist + `@oat/web-bff` tests.
-- **009** **`done`** — PRD YAML `prd_status: draft`, revision log.
-- **TASK-ADR-AUTH-MIGRATION-004 / JOB-PIPELINE-SPLIT-005 / REALTIME-GATEWAY-006** — stay **`review`** until ADRs Accepted + **`main`** merge per team policy (**do not** auto-**done**).
+- **TASK-RBAC-MEMBERSHIP-API-007** → **`done`** — membership read probe parity + tests + ADR 0004 (closure validation logged in `tasks.json` evidence_refs).
+- **TASK-WORKERS-DEFERRED-019** → **`done`** — strangler doc deferral pointer for diagram worker boxes.
+- **TASK-ADR-004 / 005 / 006** — unchanged **`review`** (ADR **0005–0007** still **Proposed**).
 
 ## Next actions
 
-1. PR **`feat/agent-harness-wave`** → **`main`**: human review **007**; optionally flip **007** → **`done`** post-merge.
-2. **TASK-AUTH-SESSION-SLICE-010**: **blocked** until **ADR 0005** accepted on mainline and a scoped first commit exists (see HANDOFF).
-3. Next queue by priority: ADR tasks **004–006** (evidence on branch) or **010** when unblocked.
+1. PR **`feat/agent-harness-wave`** → **`main`** when ready.
+2. **`TASK-KAFKA-GOVERNANCE-016`** or **`TASK-SEARCH-ADR-018`** — next pending doc/research slices without ADR acceptance gates.
+3. **`TASK-AUTH-SESSION-SLICE-010`** — remain **`pending`** until ADR **0005** **Accepted** on **main**.

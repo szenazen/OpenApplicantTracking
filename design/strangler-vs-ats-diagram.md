@@ -27,6 +27,10 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | **Mobile BFF** | Not implemented. | Separate BFF when mobile ships. |
 | **RBAC service** as separate global service | Account-scoped roles live in **global DB**; enforced via **`apps/api` [`AccountGuard`](../apps/api/src/common/account.guard.ts)** (membership + **region** pin) vs **`account-service` [`AccountContextGuard`](../services/account-service/src/common/account-context.guard.ts)** (membership only). No standalone RBAC service yet — see [ADR 0004](../docs/adr/0004-account-membership-rbac-boundary.md). | Extract when scope warrants. |
 
+## Deferred diagram workers (not extracted yet)
+
+[`ATS-design.drawio.xml`](./ATS-design.drawio.xml) names **Notification Service**, **Audit Worker** / **Audit Service**, **CV Parser Worker**, and **Analytics Worker** as separate boxes. This repo does **not** run them as standalone deployables; behavior stays in **`apps/api`** or is unbuilt until product priorities justify child tasks (`.agent/tasks.json` **TASK-WORKERS-DEFERRED-019**).
+
 ## How to use this file
 
 - When adding a **new BFF route** or service, check the diagram for **ownership** (which DB and which service box).

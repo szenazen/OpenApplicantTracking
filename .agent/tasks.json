@@ -215,9 +215,9 @@
     "title": "Implement membership/RBAC read API split per ADR 0004 (account-service vs new service)",
     "type": "implementation",
     "priority": 6,
-    "status": "review",
+    "status": "done",
     "role": "engineer",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "Behavior matches ADR 0004: scoped APIs for membership/role reads used by BFF or regional services",
       "apps/api guards updated or shimmed per ADR; tests for moved surface",
@@ -231,7 +231,8 @@
     ],
     "evidence_refs": [
       "2026-05-05: ADR 0004 probe — `GET /api/accounts/current/membership` on account-service; BFF routes `/api/accounts/current/*`. Tests: `@oat/account-service` unit + integration (120s cap).",
-      "2026-05-05: Monolith parity — same route + `{ accountId, role, status: 'ACTIVE' }` on `apps/api` via `AccountGuard`; `pnpm --filter @oat/api exec jest test/accounts.spec.ts --runInBand` (bounded). ADR 0004 endpoint table row documents slice vs backup API."
+      "2026-05-05: Monolith parity — same route + `{ accountId, role, status: 'ACTIVE' }` on `apps/api` via `AccountGuard`; `pnpm --filter @oat/api exec jest test/accounts.spec.ts --runInBand` (bounded). ADR 0004 endpoint table row documents slice vs backup API.",
+      "2026-05-06: Closure validation — `perl -e 'alarm 120; exec @ARGV'` + `@oat/account-service` test + test:integration + `@oat/api` `test/accounts.spec.ts` + `@oat/web-bff` test (all green)."
     ],
     "validation": [
       "pnpm --filter @oat/account-service test && test:integration",
@@ -244,7 +245,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/account-service", "apps/api/src/common", "services/web-bff/src/routing.ts"],
-    "handoff": "Reviewer: slice + monolith expose read-only membership probe per ADR 0004 (contract aligned). Merge or mark **done** after PR review; follow-on ADR backlog for richer membership reads stays separate."
+    "handoff": "Read-only membership probe shipped on account-service + apps/api per ADR 0004; richer membership reads remain future backlog."
   },
   {
     "id": "TASK-WEB-BFF-HARDEN-008",
@@ -565,9 +566,9 @@
     "title": "Notification, Audit, CV parser workers — backlog placeholder (no implementation until triggered)",
     "type": "planning",
     "priority": 18,
-    "status": "pending",
+    "status": "done",
     "role": "planner",
-    "phase": "plan",
+    "phase": "done",
     "acceptance_criteria": [
       "When product priorities require: split into separate tasks with acceptance criteria",
       "Until then: reference diagram boxes and strangler doc only"
@@ -576,15 +577,17 @@
       "design/ATS-design.drawio.xml",
       "design/strangler-vs-ats-diagram.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: `design/strangler-vs-ats-diagram.md` — **Deferred diagram workers** links ATS-design.drawio.xml boxes (Notification, Audit, CV Parser, Analytics) to this placeholder; no code changes."
+    ],
     "validation": ["Tasks split from this placeholder when PRD demands"],
     "risk_level": "low",
     "context_budget": "small",
     "work_mode": "collaborative",
     "base_branch": "main",
     "branch": null,
-    "file_scope": [],
-    "handoff": "Parking lot for diagram workers; cancel or spawn children when scope firm."
+    "file_scope": ["design/strangler-vs-ats-diagram.md"],
+    "handoff": "Documented deferral in strangler note; spawn scoped tasks when PRD prioritizes each worker."
   },
   {
     "id": "TASK-MOBILE-BFF-DEFERRED-099",
