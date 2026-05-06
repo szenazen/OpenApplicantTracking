@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Record
+
+- **2026-05-06:** Accepted for strangler execution on `feat/agent-harness-wave` — phased cutover, shared `JWT_SECRET`, BFF-flag rollback, and non-goals (MFA, etc.) are sufficient to start **TASK-AUTH-SESSION-SLICE-010** once this ADR is **on `main`**.
 
 ## Context
 

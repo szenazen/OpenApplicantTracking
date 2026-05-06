@@ -14,6 +14,8 @@ The original system design targets **separate deployable services** (Account & m
 | [`auth-service`](./auth-service) | `3020` | **`POST /api/slice/auth/verify-access`** (JWT signature/expiry vs `JWT_SECRET`); **`GET …/probe`** (BFF flag); no DB; login/register still on backup API until cut-over | Pilot extract |
 | [`kafka-ping`](./kafka-ping) | `3040` | Produce/consume on Redpanda (Kafka API) for async path smoke | Dev / wiring |
 
+**Kafka conventions:** [docs/kafka-governance.md](../docs/kafka-governance.md) (topics, ownership, idempotency / DLQ checklist).
+
 **Monolith vs edge:** [docs/deployment-modes.md](../docs/deployment-modes.md).
 
 Responses include `_service: "…"` on several handlers so callers can verify routing during migration.
@@ -107,4 +109,4 @@ See [`k8s/local/README.md`](./k8s/local/README.md) for manifests and limitations
 1. **Web BFF** + account reads/invites/members + `GET /platform/accounts` → next: more extracted services or `POST /platform/accounts` when a dedicated provisioning service exists.
 2. Expand **pipeline-service** (or split **Job Service** per diagram) until regional job/Kanban live in owned stores; keep **Web BFF** as the path router ([`design/strangler-vs-ats-diagram.md`](../design/strangler-vs-ats-diagram.md)).
 3. **Socket.IO:** add Redis adapter + separate realtime deployment (see `docs/adr/0002-realtime-kanban-via-socketio.md`).
-4. Async domain events via existing Redpanda in `docker-compose.yml`.
+4. Async domain events via existing Redpanda in `docker-compose.yml` — see [kafka-governance.md](../docs/kafka-governance.md).

@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Record
+
+- **2026-05-06:** Accepted on `feat/agent-harness-wave` — defers to [ADR 0002](./0002-realtime-kanban-via-socketio.md) for behaviour; documents extraction phases, BFF/nginx default, and **TASK-REALTIME-GATEWAY-011** as implementation gate.
 
 ## Context
 

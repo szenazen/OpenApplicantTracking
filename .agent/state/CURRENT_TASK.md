@@ -2,12 +2,13 @@
 
 ## Last session (`feat/agent-harness-wave`, 2026-05-06)
 
-- **TASK-RBAC-MEMBERSHIP-API-007** → **`done`** — membership read probe parity + tests + ADR 0004 (closure validation logged in `tasks.json` evidence_refs).
-- **TASK-WORKERS-DEFERRED-019** → **`done`** — strangler doc deferral pointer for diagram worker boxes.
-- **TASK-ADR-004 / 005 / 006** — unchanged **`review`** (ADR **0005–0007** still **Proposed**).
+- **TASK-ADR-AUTH-MIGRATION-004**, **TASK-ADR-JOB-PIPELINE-SPLIT-005**, **TASK-ADR-REALTIME-GATEWAY-006** → **`done`** — ADRs **0005–0007** **Accepted** + dated Record on branch.
+- **TASK-KAFKA-GOVERNANCE-016** → **`done`** — `docs/kafka-governance.md` wired into deployment doc, services index, pipeline README, strangler table.
+- **TASK-SEARCH-ADR-018** → **`done`** — **ADR 0008** research skeleton + diagram link.
+- **TASK-AUTH-SESSION-SLICE-010** — unchanged **`pending`**; `evidence_refs` documents **main** merge prerequisite for auth slice code.
 
 ## Next actions
 
-1. PR **`feat/agent-harness-wave`** → **`main`** when ready.
-2. **`TASK-KAFKA-GOVERNANCE-016`** or **`TASK-SEARCH-ADR-018`** — next pending doc/research slices without ADR acceptance gates.
-3. **`TASK-AUTH-SESSION-SLICE-010`** — remain **`pending`** until ADR **0005** **Accepted** on **main**.
+1. Open / refresh PR: **`feat/agent-harness-wave`** → **`main`** (ADR acceptance + governance + search research).
+2. After **0005** on **main**: start **TASK-AUTH-SESSION-SLICE-010** per ADR Phase 1.
+3. After **0007** on **main**: ungate **TASK-REALTIME-GATEWAY-011** implementation planning.

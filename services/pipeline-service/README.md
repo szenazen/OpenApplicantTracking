@@ -6,7 +6,7 @@ Strangler extract with a **dedicated Postgres** (`PIPELINE_SLICE_DATABASE_URL` /
 - **Liveness + DB:** `GET /api/slice/pipeline/verify` (no auth).
 - **Backup-API opt-in (no BFF):** In `apps/api`, `OAT_USE_PIPELINE_SLICE=true` + `PIPELINE_SLICE_BASE_URL` delegates `/api/pipelines` here. **Preferred:** Web BFF with `BFF_PIPELINES_TO_SLICE` so the browser never depends on `apps/api` for pipelines.
 - **BFF** routes here when `PIPELINE_SLICE_ENABLED=1` and `PIPELINE_SERVICE_URL` is set.
-- **Events:** If `KAFKA_BROKERS` is set, domain events are emitted to topic `oat.domain.pipeline` (e.g. Redpanda in compose).
+- **Events:** If `KAFKA_BROKERS` is set, domain events are emitted to topic `oat.domain.pipeline` (e.g. Redpanda in compose). Governance (keys, naming, consumer checklist): [`docs/kafka-governance.md`](../../docs/kafka-governance.md).
 - **Owners:** Set `ACCOUNT_SERVICE_URL` (e.g. `http://localhost:3010` locally, `http://account-service:3010` in compose) so job list/detail can resolve **`owner`** via `POST /api/accounts/current/member-profiles`.
 
 See [../README.md](../README.md) and [../../docs/deployment-modes.md](../../docs/deployment-modes.md).

@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Record
+
+- **2026-05-06:** Accepted on `feat/agent-harness-wave` — **defer split** by default; explicit criteria and two-DB / event integration story when split is warranted.
 
 ## Context
 

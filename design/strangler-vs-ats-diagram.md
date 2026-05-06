@@ -14,8 +14,9 @@ This note maps the **target architecture** in [`ATS-design.drawio.xml`](./ATS-de
 | **Pipeline Service** — CRUD pipelines, ordered statuses | [`services/pipeline-service`](../services/pipeline-service): pipelines REST + slice DB; BFF can rewrite `/api/pipelines` when `BFF_PIPELINES_TO_SLICE`. |
 | **Regional ATS** data: **jobs**, **pipelines**, **applications** | Slice DB holds **candidates**, **applications** (Kanban cards after drain), **jobs** (list fields), **pipelines**; pipeline-service may call **account-service** to resolve job **owners** (active members). |
 | **Service ownership** — own DB, no direct cross-DB reads | `pipeline-service` uses **only** `PIPELINE_SLICE_DATABASE_URL`; `account-service` uses global Prisma; **`apps/api`** owns regional DB until domains are fully split. |
-| **Async: Kafka** | `pipeline-service` emits to `oat.domain.pipeline` when `KAFKA_BROKERS` is set ([`DomainEventsService`](../services/pipeline-service/src/domain-events/domain-events.service.ts)); diagram’s “Kafka (async com)” matches this direction. |
+| **Async: Kafka** | `pipeline-service` emits to `oat.domain.pipeline` when `KAFKA_BROKERS` is set ([`DomainEventsService`](../services/pipeline-service/src/domain-events/domain-events.service.ts)); diagram’s “Kafka (async com)” matches this direction. Conventions: [`docs/kafka-governance.md`](../docs/kafka-governance.md). |
 | **Realtime / Kanban live** | **Realtime Gateway** in the diagram → today **`/realtime`** is still proxied to **`apps/api`** (Socket.IO; [ADR 0002](../docs/adr/0002-realtime-kanban-via-socketio.md)); extraction to a dedicated gateway + Redis adapter is described in [ADR 0007](../docs/adr/0007-realtime-gateway-extraction.md). |
+| **Search** (e.g. OpenSearch / Elasticsearch in diagram) | **Not implemented** as a standalone service; monolith / DB queries today. Placement, cost trade-offs, and explicit deferral of full search extraction: [ADR 0008](../docs/adr/0008-search-service-placement-research.md). |
 
 ## Pilot / intentional compression (differs from diagram layout)
 

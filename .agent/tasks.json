@@ -112,9 +112,9 @@
     "title": "ADR: Auth Service migration (login, refresh, sessions vs verify-only pilot)",
     "type": "planning",
     "priority": 3,
-    "status": "review",
+    "status": "done",
     "role": "architect",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "New ADR under docs/adr/ describing phased cutover from apps/api auth to auth-service (JWT/session store, BFF flags, rollback)",
       "design/strangler-vs-ats-diagram.md links to ADR; diagram Auth Service row updated with migration state",
@@ -132,7 +132,8 @@
       "docs/adr/0005-auth-session-strangler-phased-cutover.md",
       "design/strangler-vs-ats-diagram.md — Auth Service row → ADR 0005",
       "services/auth-service/README.md — cross-link to ADR 0005",
-      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR Status **Proposed** and awaiting merge/`Accepted`→ keep **review** until then."
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR Status **Proposed** and awaiting merge/`Accepted`→ keep **review** until then.",
+      "2026-05-06: ADR 0005 **Accepted** + Record on `feat/agent-harness-wave`; task closed — merge to **main** for org-wide default."
     ],
     "validation": ["Docs-only PR reviewed", "Strangler diagram + services README auth-service section consistent"],
     "risk_level": "medium",
@@ -141,16 +142,16 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md", "services/auth-service/README.md"],
-    "handoff": "Prerequisite for TASK-AUTH-SESSION-SLICE-010 implementation work."
+    "handoff": "ADR 0005 Accepted on wave branch; **TASK-AUTH-SESSION-SLICE-010** remains gated on **main** merge per programme rules."
   },
   {
     "id": "TASK-ADR-JOB-PIPELINE-SPLIT-005",
     "title": "ADR: Split Job Service vs Pipeline Service (when to break pipeline-service)",
     "type": "planning",
     "priority": 4,
-    "status": "review",
+    "status": "done",
     "role": "architect",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "ADR records split criteria, data ownership (two DBs vs shared events), and BFF routing implications",
       "design/strangler-vs-ats-diagram.md pilot compression section updated with decision or reaffirmed deferral"
@@ -165,7 +166,8 @@
     "evidence_refs": [
       "docs/adr/0006-job-service-vs-pipeline-service-split.md",
       "design/strangler-vs-ats-diagram.md — Job/Pipeline pilot row + How to use → ADR 0006",
-      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge."
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge.",
+      "2026-05-06: ADR 0006 **Accepted** + Record on `feat/agent-harness-wave`."
     ],
     "validation": ["ADR merged; diagram cross-reference present"],
     "risk_level": "medium",
@@ -174,16 +176,16 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "If ADR says split now, spawn follow-up implementation tasks; else park until scale warrants."
+    "handoff": "ADR 0006 Accepted — default remains combined pipeline-service until ADR criteria force a split."
   },
   {
     "id": "TASK-ADR-REALTIME-GATEWAY-006",
     "title": "ADR: Realtime Gateway extraction (Socket.IO, Redis adapter, regional fan-out)",
     "type": "architecture",
     "priority": 5,
-    "status": "review",
+    "status": "done",
     "role": "architect",
-    "phase": "review",
+    "phase": "done",
     "acceptance_criteria": [
       "ADR for moving /realtime off apps/api toward diagram Realtime Gateway Service",
       "References docs/adr/0002-realtime-kanban-via-socketio.md if still current",
@@ -199,7 +201,8 @@
     "evidence_refs": [
       "docs/adr/0007-realtime-gateway-extraction.md",
       "design/strangler-vs-ats-diagram.md — Realtime row → ADR 0007 + ADR 0002",
-      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge."
+      "2026-05-05 wave-2: Doc AC satisfied on branch; ADR **Proposed** + PR not on **main**—keep **review** until Accepted + merge.",
+      "2026-05-06: ADR 0007 **Accepted** + Record on `feat/agent-harness-wave`."
     ],
     "validation": ["Doc review + security pass on Redis + JWT for sockets"],
     "risk_level": "high",
@@ -208,7 +211,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Feeds TASK-REALTIME-GATEWAY-011; do not start implementation until ADR accepted."
+    "handoff": "ADR 0007 Accepted on wave branch; **TASK-REALTIME-GATEWAY-011** still waits for **main** merge before code tranche."
   },
   {
     "id": "TASK-RBAC-MEMBERSHIP-API-007",
@@ -321,9 +324,12 @@
       "services/auth-service",
       "apps/api/src/modules/auth",
       "services/web-bff/src/routing.ts",
-      "design/ATS-design.drawio.xml"
+      "design/ATS-design.drawio.xml",
+      "docs/adr/0005-auth-session-strangler-phased-cutover.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: **Blocked:** ADR 0005 **Accepted** on `feat/agent-harness-wave` but **not on `main`** — programme gate: start **TASK-AUTH-SESSION-SLICE-010** only after ADR 0005 lands on **main**."
+    ],
     "validation": [
       "pnpm --filter @oat/auth-service test",
       "pnpm --filter @oat/web-bff test",
@@ -336,7 +342,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/auth-service", "services/web-bff", "apps/api/src/modules/auth"],
-    "handoff": "Blocked until TASK-ADR-AUTH-MIGRATION-004 is done and reviewed."
+    "handoff": "**Blocked** until **docs/adr/0005** (Accepted) is **merged to `main`**; ADR task **004** is **done** on branch only."
   },
   {
     "id": "TASK-REALTIME-GATEWAY-011",
@@ -483,9 +489,9 @@
     "title": "Kafka consumers governance (topics, idempotency, DLQ, alignment with pipeline events)",
     "type": "devops",
     "priority": 15,
-    "status": "pending",
+    "status": "done",
     "role": "devops",
-    "phase": "plan",
+    "phase": "done",
     "acceptance_criteria": [
       "Document topic naming, consumer ownership, and retry policy vs services/pipeline-service DomainEventsService",
       "Optional: lint or checklist in docs/deployment-modes.md"
@@ -494,9 +500,12 @@
       "design/ATS-design.drawio.xml",
       "services/pipeline-service/src/domain-events",
       "services/kafka-ping",
-      ".cursor/skills/reliability-patterns/SKILL.md"
+      ".cursor/skills/reliability-patterns/SKILL.md",
+      "docs/kafka-governance.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "docs/kafka-governance.md — topics, producer/consumer rules, DLQ naming, checklist; linked from docs/deployment-modes.md, services/README.md, services/pipeline-service/README.md, design/strangler-vs-ats-diagram.md"
+    ],
     "validation": ["Runbook reviewed by engineer"],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -504,7 +513,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/", "services/pipeline-service"],
-    "handoff": "Supports diagram Kafka async communication maturity."
+    "handoff": "Governance doc is source of truth for `oat.domain.*` topics and future consumer onboarding."
   },
   {
     "id": "TASK-ACCOUNT-TENANT-PROVISION-017",
@@ -540,18 +549,21 @@
     "title": "Internal/external search ADR (Elasticsearch or future) — research only",
     "type": "research",
     "priority": 17,
-    "status": "pending",
+    "status": "done",
     "role": "architect",
-    "phase": "discover",
+    "phase": "done",
     "acceptance_criteria": [
       "Short ADR or research doc on search service placement in diagram vs cost",
       "Defer full implementation until core slices stable (explicit)"
     ],
     "context_refs": [
       "design/ATS-design.drawio.xml",
-      ".agent/prd/prd.md"
+      ".agent/prd/prd.md",
+      "docs/adr/0008-search-service-placement-research.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "docs/adr/0008-search-service-placement-research.md (Proposed research), design/strangler-vs-ats-diagram.md — Search row"
+    ],
     "validation": ["Document linked from strangler diagram"],
     "risk_level": "low",
     "context_budget": "small",
@@ -559,7 +571,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Low priority until P0–P12 momentum."
+    "handoff": "Search extraction explicitly deferred; ADR 0008 is the research anchor."
   },
   {
     "id": "TASK-WORKERS-DEFERRED-019",

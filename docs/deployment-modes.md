@@ -53,3 +53,5 @@ If you call **`apps/api` on :3001 directly** (no BFF) but still want pipeline CR
 ## Async events
 
 **Redpanda** (Kafka API) in `docker-compose.yml` is used by `kafka-ping` in the overlay and by services that publish domain events (e.g. pipeline-service when `KAFKA_BROKERS` is set). This does not require routing through `apps/api`.
+
+Topic naming, keys, and consumer idempotency / DLQ conventions: [kafka-governance.md](./kafka-governance.md).
