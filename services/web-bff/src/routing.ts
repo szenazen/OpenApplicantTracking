@@ -22,6 +22,15 @@ function isEnabled(name: 'PIPELINE_SLICE' | 'AUTH_SLICE' | 'USER_SLICE'): boolea
   return process.env[k] === '1' || process.env[k] === 'true';
 }
 
+/** When set with `AUTH_SLICE_ENABLED`, `POST /api/slice/auth/login` is served by auth-service (monolith shim). */
+function authLoginShimEnabled(): boolean {
+  return process.env.AUTH_LOGIN_SHIM === '1' || process.env.AUTH_LOGIN_SHIM === 'true';
+}
+
+function isSliceAuthLoginPost(method: string, pathOnly: string): boolean {
+  return method === 'POST' && pathOnly === '/api/slice/auth/login';
+}
+
 /**
  * @param method HTTP method
  * @param url Full URL path including query (e.g. /api/health?x=1)
@@ -49,6 +58,9 @@ export function resolveUpstream(method: string, url: string): UpstreamKind {
   }
 
   if (isEnabled('AUTH_SLICE') && p.startsWith('/api/slice/auth')) {
+    if (isSliceAuthLoginPost(m, p)) {
+      return authLoginShimEnabled() ? 'auth' : 'monolith';
+    }
     return 'auth';
   }
 

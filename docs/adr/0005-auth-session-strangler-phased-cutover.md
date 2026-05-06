@@ -28,6 +28,7 @@ We need a **controlled strangler** for **session-bearing** auth (cookies / refre
 ## BFF and edge flags
 
 - **`AUTH_SLICE_ENABLED`:** routes **`/api/slice/auth/*`** to auth-service (existing).
+- **`AUTH_LOGIN_SHIM`:** together with the above, routes **`POST /api/slice/auth/login`** to auth-service, which forwards JSON to **`MONOLITH_URL`** `POST /api/auth/login` ([`services/auth-service/README.md`](../../services/auth-service/README.md)). If **`AUTH_LOGIN_SHIM`** is unset/false, Web BFF sends that request to **`apps/api`** via path rewrite to **`/api/auth/login`** ([`services/web-bff/src/routing.ts`](../../services/web-bff/src/routing.ts)).
 - **Future flags** (names TBD in implementation task): narrow **login / refresh / logout** path families so pilots can enable one without enabling all. **Nginx** reference gateway continues to mirror **only** `/api/slice/auth/*`; **BFF** owns conditional rewrites for public monolith paths if strangler requires them (per ADR 0003 parity rules).
 
 ## Non-goals (this ADR / phase)

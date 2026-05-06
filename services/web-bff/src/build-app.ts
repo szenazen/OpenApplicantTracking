@@ -151,6 +151,10 @@ export async function buildApp(opts: Partial<BffOptions> = {}): Promise<FastifyI
       dest = isPublicJobsListPath(pathOnly)
         ? new URL(rewriteJobsListToSlicePath(request.url, accountId), `${pipeline}/`).toString()
         : new URL(rewriteJobsDetailToSlicePath(request.url, accountId), `${pipeline}/`).toString();
+    } else if (kind === 'monolith' && method === 'POST' && pathOnly === '/api/slice/auth/login') {
+      const u = new URL(request.url, 'http://bff-slice-login-rewrite.local');
+      u.pathname = '/api/auth/login';
+      dest = new URL(u.pathname + u.search, `${monolith}/`).toString();
     } else {
       dest = buildDestUrl(
         request,

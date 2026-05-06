@@ -1,6 +1,16 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  Post,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
+import { LoginShimDto } from './login-shim.dto';
+import { MonolithLoginShimService } from './monolith-login-shim.service';
 import { VerifyAccessDto } from './verify-access.dto';
 
 /**
@@ -9,11 +19,30 @@ import { VerifyAccessDto } from './verify-access.dto';
  */
 @Controller('slice/auth')
 export class AuthSliceController {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly monolithLoginShim: MonolithLoginShimService,
+  ) {}
 
   @Get('probe')
   probe() {
     return { _service: 'auth-service', state: 'placeholder', dataOwnedByService: true };
+  }
+
+  /**
+   * Strangler shim: **`POST /api/auth/login`** on **`MONOLITH_URL`** when **`AUTH_LOGIN_SHIM`** — BFF
+   * sends slice traffic here only when that flag is set (see **`services/web-bff/src/routing.ts`**).
+   */
+  @Post('login')
+  async loginSlice(@Body() dto: LoginShimDto): Promise<unknown> {
+    if (!this.monolithLoginShim.isShimEnabled()) {
+      throw new ServiceUnavailableException({
+        error: 'AUTH_LOGIN_SHIM_disabled',
+        detail: 'Enable AUTH_LOGIN_SHIM or call POST /api/auth/login via BFF toward monolith.',
+      });
+    }
+    const out = await this.monolithLoginShim.forwardLogin(dto);
+    throw new HttpException(out.body, out.status);
   }
 
   /** Validate access token signature and expiry against `JWT_SECRET` (same as backup API). */

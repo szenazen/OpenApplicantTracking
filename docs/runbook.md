@@ -128,3 +128,13 @@ behaviour must:
 
 Keep failing CI artifacts — they contain traces and videos that reproduce
 the failure locally via `playwright show-trace <trace.zip>`.
+
+---
+
+## 7. Realtime Gateway extraction (defer big refactors)
+
+**ADR:** [adr/0007-realtime-gateway-extraction.md](./adr/0007-realtime-gateway-extraction.md) (topology + phases; behaviour remains [adr/0002-realtime-kanban-via-socketio.md](./adr/0002-realtime-kanban-via-socketio.md)).
+
+**Operational phased notes:** [realtime-gateway-tranche-notes.md](./realtime-gateway-tranche-notes.md).
+
+**Rule of thumb:** do **not** rewrite Socket.IO in one burst — move upstream for **`/realtime`** only behind flags, prove Kanban e2e parity, **then** add Redis adapter when horizontal scale requires it (`TASK-REALTIME-GATEWAY-011`).

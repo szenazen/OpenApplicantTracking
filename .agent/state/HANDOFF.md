@@ -2,16 +2,17 @@
 
 ## Restart capsule
 
-- **Branch:** `feat/agent-harness-wave` — synced with **`origin/main`** (2026-05-06); push after this session’s commit.
-- **TASK-ADR-AUTH-MIGRATION-004**, **TASK-ADR-JOB-PIPELINE-SPLIT-005**, **TASK-ADR-REALTIME-GATEWAY-006** → **`done`:** ADRs **0005–0007** set **Accepted** + Record; merge PR to **`main`** for org default.
-- **TASK-KAFKA-GOVERNANCE-016** → **`done`:** `docs/kafka-governance.md` + links from `deployment-modes.md`, `services/README.md`, `pipeline-service` README, strangler diagram.
-- **TASK-SEARCH-ADR-018** → **`done`:** `docs/adr/0008-search-service-placement-research.md` (Proposed) + strangler **Search** row.
-- **TASK-AUTH-SESSION-SLICE-010** — **`pending`:** ADR **0005** Accepted on branch — **do not implement** until **0005 is on `main`** (programme gate).
+- **Branch:** `feat/agent-harness-wave` — **`git fetch` / `git rebase origin/main`** (latest run: up to date with `origin/main`); **push** reflects auth slice shim + docs/tasks wave.
+- **`TASK-AUTH-SESSION-SLICE-010`** → **`review`:** phase-0 **login** strangler — **`AUTH_LOGIN_SHIM`**, BFF routes slice login to auth-service or monolith rewrite to **`/api/auth/login`**; auth-service **`fetch`** shim to **`MONOLITH_URL`**.
+- **`TASK-REALTIME-GATEWAY-011`** → **`in_progress` (docs):** **`docs/realtime-gateway-tranche-notes.md`** + **`docs/runbook.md`** §7 — **ADR 0007** pointer; **no** Socket.IO refactor this wave.
+- **`TASK-CANDIDATE-SLICE-P1-012`** / **`TASK-JOB-APP-SLICE-P1-013`:** handoff note **`docs/handoff/strangler-p1-candidate-job-slices.md`** (+ **tasks.json** `evidence_refs`).
+- **`TASK-SKILLS-CATALOG-014`** / **`TASK-FILE-SERVICE-015`** / **`TASK-ACCOUNT-TENANT-PROVISION-017`:** **ADR 0009–0011** Proposed stubs only.
+- **`TASK-MOBILE-BFF-DEFERRED-099`** **`pending`** — `evidence_refs`: **unchanged deferred**.
 
 ## Blockers / gaps
 
-- Merge **wave branch** → **`main`** to unblock **010** / **011** implementation starts per queue handoffs.
-- ADR **0008** remains **Proposed** (research); no search service build-out.
+- Refresh tokens + E2E login path for **010** still open vs full AC; merge **ADR 0005 + shim** to **`main`** when ready.
+- Realtime **code** tranche remains gated on org process for **ADR 0007** on **`main`** if programme requires it.
 
 ## Merges (already on `main`)
 

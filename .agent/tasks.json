@@ -311,9 +311,9 @@
     "title": "Implement auth session slice (login/refresh) behind BFF flags per auth migration ADR",
     "type": "implementation",
     "priority": 9,
-    "status": "pending",
+    "status": "review",
     "role": "engineer",
-    "phase": "discover",
+    "phase": "validate",
     "acceptance_criteria": [
       "auth-service and BFF routing support pilot login/refresh paths as defined in TASK-ADR-AUTH-MIGRATION-004",
       "Shared JWT_SECRET compatibility with apps/api during strangler; rollback path documented",
@@ -328,7 +328,8 @@
       "docs/adr/0005-auth-session-strangler-phased-cutover.md"
     ],
     "evidence_refs": [
-      "2026-05-06: **Blocked:** ADR 0005 **Accepted** on `feat/agent-harness-wave` but **not on `main`** — programme gate: start **TASK-AUTH-SESSION-SLICE-010** only after ADR 0005 lands on **main**."
+      "2026-05-06: Programme note (merge optics): ship **ADR 0005** + implementation to **`main`** for org-wide default.",
+      "2026-05-06: **Phase-0 shim (wave branch HEAD):** `AUTH_LOGIN_SHIM` + Web BFF routing for **POST `/api/slice/auth/login`**; auth-service forwards JSON to **`MONOLITH_URL` `/api/auth/login`**; without shim flag BFF rewrites slice path to **`/api/auth/login`**. Bounded tests: `@oat/auth-service` + `@oat/web-bff`. Refresh tokens / soak / E2E remain backlog."
     ],
     "validation": [
       "pnpm --filter @oat/auth-service test",
@@ -342,16 +343,16 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/auth-service", "services/web-bff", "apps/api/src/modules/auth"],
-    "handoff": "**Blocked** until **docs/adr/0005** (Accepted) is **merged to `main`**; ADR task **004** is **done** on branch only."
+    "handoff": "**review:** login slice shim landed on **`feat/agent-harness-wave`**; merge ADR **0005** + code to **`main`** for org default; follow with refresh contract + E2E per full AC."
   },
   {
     "id": "TASK-REALTIME-GATEWAY-011",
     "title": "Implement Realtime Gateway extraction tranche 1 per realtime ADR",
     "type": "implementation",
     "priority": 10,
-    "status": "pending",
+    "status": "in_progress",
     "role": "engineer",
-    "phase": "discover",
+    "phase": "plan",
     "acceptance_criteria": [
       "Per TASK-ADR-REALTIME-GATEWAY-006: deployable path for Kanban live updates off monolith boundary or documented incremental step",
       "Socket auth and Redis adapter concerns addressed in code or runbook",
@@ -361,9 +362,13 @@
       "TASK-ADR-REALTIME-GATEWAY-006",
       "apps/api/src/modules/realtime",
       "design/ATS-design.drawio.xml",
-      "docs/adr/0002-realtime-kanban-via-socketio.md"
+      "docs/adr/0002-realtime-kanban-via-socketio.md",
+      "docs/realtime-gateway-tranche-notes.md",
+      "docs/runbook.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: **Docs tranche:** `docs/realtime-gateway-tranche-notes.md` + runbook §7 — references **ADR 0007**; no Socket.IO refactor in this wave."
+    ],
     "validation": ["Integration smoke for websocket path; unit tests for auth handshake helpers if extracted"],
     "risk_level": "high",
     "context_budget": "large",
@@ -371,7 +376,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["apps/api/src/modules/realtime", "services/"],
-    "handoff": "Blocked until realtime ADR is accepted."
+    "handoff": "**in_progress (docs):** operational phases + runbook link; code tranche still gated on **main** merge of **ADR 0007** per programme."
   },
   {
     "id": "TASK-CANDIDATE-SLICE-P1-012",
@@ -390,9 +395,12 @@
       "design/strangler-vs-ats-diagram.md",
       "design/ATS-design.drawio.xml",
       "services/pipeline-service",
-      "apps/api"
+      "apps/api",
+      "docs/handoff/strangler-p1-candidate-job-slices.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: Planning handoff only — **`docs/handoff/strangler-p1-candidate-job-slices.md`** (narrow ADR/Task note with **TASK-JOB-APP-SLICE-P1-013**); no endpoint in this wave."
+    ],
     "validation": ["Package tests for touched services", "Manual QA notes in PR"],
     "risk_level": "high",
     "context_budget": "large",
@@ -400,7 +408,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/pipeline-service", "apps/api", "services/web-bff"],
-    "handoff": "Sequence after pipeline/ownership ADRs stable."
+    "handoff": "See **`docs/handoff/strangler-p1-candidate-job-slices.md`** + **TASK-JOB-APP-SLICE-P1-013**; sequence after pipeline/ownership ADRs stable."
   },
   {
     "id": "TASK-JOB-APP-SLICE-P1-013",
@@ -418,9 +426,13 @@
     "context_refs": [
       "design/strangler-vs-ats-diagram.md",
       "services/pipeline-service",
-      "apps/api"
+      "apps/api",
+      "docs/adr/0006-job-service-vs-pipeline-service-split.md",
+      "docs/handoff/strangler-p1-candidate-job-slices.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: Joint planning handoff with **012** — **`docs/handoff/strangler-p1-candidate-job-slices.md`**; no code in this wave."
+    ],
     "validation": ["Relevant package tests green"],
     "risk_level": "high",
     "context_budget": "large",
@@ -428,7 +440,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["services/pipeline-service", "apps/api", "services/web-bff"],
-    "handoff": "Often coupled with candidate slice — coordinate ordering with architect."
+    "handoff": "Tied to **TASK-CANDIDATE-SLICE-P1-012** via **`docs/handoff/strangler-p1-candidate-job-slices.md`**; coordinate Kanban reads with architect."
   },
   {
     "id": "TASK-SKILLS-CATALOG-014",
@@ -445,9 +457,12 @@
     "context_refs": [
       "design/ATS-design.drawio.xml",
       "apps/api",
-      "services/account-service"
+      "services/account-service",
+      "docs/adr/0009-skills-catalog-service-strangler.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: **ADR 0009** Proposed stub — `docs/adr/0009-skills-catalog-service-strangler.md` (no service build-out this wave)."
+    ],
     "validation": ["Stakeholder review of scope against PRD skills requirements"],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -455,7 +470,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "design/strangler-vs-ats-diagram.md"],
-    "handoff": "Diagram Skills service box → backlog; implementation follows ADR."
+    "handoff": "Follow **ADR 0009** framing; decomposition into engineer tasks deferred."
   },
   {
     "id": "TASK-FILE-SERVICE-015",
@@ -472,9 +487,12 @@
     "context_refs": [
       "design/ATS-design.drawio.xml",
       "apps/api",
-      "docker-compose.yml"
+      "docker-compose.yml",
+      "docs/adr/0010-file-service-ownership-strangler.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: **ADR 0010** Proposed stub — `docs/adr/0010-file-service-ownership-strangler.md` (no service cutover this wave)."
+    ],
     "validation": ["Security role sign-off on draft"],
     "risk_level": "medium",
     "context_budget": "medium",
@@ -482,7 +500,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "apps/api"],
-    "handoff": "Implementation task to be added after ADR."
+    "handoff": "Proceed from **ADR 0010**; security review mandatory before ingress changes."
   },
   {
     "id": "TASK-KAFKA-GOVERNANCE-016",
@@ -532,9 +550,12 @@
       "apps/api",
       "services/account-service",
       "design/strangler-vs-ats-diagram.md",
-      "design/ATS-design.drawio.xml"
+      "design/ATS-design.drawio.xml",
+      "docs/adr/0011-tenant-account-provisioning-strangler.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "2026-05-06: **ADR 0011** Proposed stub — `docs/adr/0011-tenant-account-provisioning-strangler.md` (no extraction this wave)."
+    ],
     "validation": ["ADR review before coding; security review mandatory"],
     "risk_level": "high",
     "context_budget": "large",
@@ -542,7 +563,7 @@
     "base_branch": "main",
     "branch": null,
     "file_scope": ["docs/adr/", "apps/api", "services/web-bff"],
-    "handoff": "Do not implement provisioning move without ADR — regional blast radius."
+    "handoff": "**ADR 0011** holds the gate; do not move **`POST /api/platform/accounts`** provisioning without acceptance + security."
   },
   {
     "id": "TASK-SEARCH-ADR-018",
@@ -617,7 +638,9 @@
       "design/ATS-design.drawio.xml",
       "docs/adr/0003-web-bff-edge-strangler.md"
     ],
-    "evidence_refs": [],
+    "evidence_refs": [
+      "unchanged deferred"
+    ],
     "validation": ["N/A until mobile scope"],
     "risk_level": "low",
     "context_budget": "small",

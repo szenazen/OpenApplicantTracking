@@ -3,6 +3,7 @@ import { resolveUpstream } from '../src/routing';
 describe('resolveUpstream', () => {
   const oldPipeline = process.env.PIPELINE_SLICE_ENABLED;
   const oldAuth = process.env.AUTH_SLICE_ENABLED;
+  const oldAuthLoginShim = process.env.AUTH_LOGIN_SHIM;
   const oldUser = process.env.USER_SLICE_ENABLED;
   const oldBffPipelines = process.env.BFF_PIPELINES_TO_SLICE;
   const oldBffJobs = process.env.BFF_JOBS_TO_SLICE;
@@ -10,6 +11,7 @@ describe('resolveUpstream', () => {
   afterEach(() => {
     process.env.PIPELINE_SLICE_ENABLED = oldPipeline;
     process.env.AUTH_SLICE_ENABLED = oldAuth;
+    process.env.AUTH_LOGIN_SHIM = oldAuthLoginShim;
     process.env.USER_SLICE_ENABLED = oldUser;
     process.env.BFF_PIPELINES_TO_SLICE = oldBffPipelines;
     process.env.BFF_JOBS_TO_SLICE = oldBffJobs;
@@ -91,6 +93,16 @@ describe('resolveUpstream', () => {
     expect(resolveUpstream('POST', '/api/slice/auth/verify-access')).toBe('auth');
     process.env.AUTH_SLICE_ENABLED = '0';
     expect(resolveUpstream('GET', '/api/slice/auth/probe')).toBe('monolith');
+  });
+
+  it('POST /api/slice/auth/login uses auth upstream only when AUTH_LOGIN_SHIM', () => {
+    process.env.AUTH_SLICE_ENABLED = '1';
+    process.env.AUTH_LOGIN_SHIM = '0';
+    expect(resolveUpstream('POST', '/api/slice/auth/login')).toBe('monolith');
+    process.env.AUTH_LOGIN_SHIM = '1';
+    expect(resolveUpstream('POST', '/api/slice/auth/login')).toBe('auth');
+    delete process.env.AUTH_LOGIN_SHIM;
+    expect(resolveUpstream('POST', '/api/slice/auth/login')).toBe('monolith');
   });
 
   it('optional user slice me route when flag set', () => {
